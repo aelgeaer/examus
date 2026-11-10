@@ -1,12 +1,16 @@
 -- Skema database Examus untuk Supabase (multi sekolah, login dengan nama akun).
 -- Cara pakai: proyek Supabase BARU > SQL Editor > tempel seluruh isi file ini > Run.
 -- Setelah itu jalankan perintah "Membuat admin pertama" di bagian paling bawah.
+-- File ini juga aman dijalankan ULANG di proyek yang sudah berjalan: ia meningkatkan skema
+-- lama (kelas milik guru) ke versi sekarang tanpa menghapus data.
 --
 -- Ringkasan rancangan:
 --  * Satu database, lima sekolah. Setiap baris data punya school_id dan Row Level Security
 --    memastikan akun sebuah sekolah tidak bisa melihat data sekolah lain.
 --  * Tidak ada pendaftaran mandiri. Semua akun dibuat admin lewat fungsi admin_*.
 --  * Admin dengan school_id kosong = admin pusat (melihat semua sekolah).
+--  * Kelas dan daftar murid hanya dibuat admin. Admin menugaskan kelas ke guru (class_teachers);
+--    satu guru boleh memegang banyak kelas. Guru hanya melihat kelas yang ditugaskan.
 --  * Kata sandi awal dari admin disimpan di tabel credentials (tanpa akses langsung dari
 --    aplikasi, hanya dibaca lewat admin_users). Begitu pengguna mengganti sandinya, salinan
 --    itu dihapus dan hanya tersisa hash bcrypt di auth.users.
@@ -25,9 +29,9 @@ create table if not exists public.schools (
 create table if not exists public.classes (
   id uuid primary key default gen_random_uuid(),
   school_id uuid not null references public.schools on delete restrict,
-  owner uuid not null references auth.users on delete cascade,
   name text not null,
   members jsonb not null default '[]',   -- [{no, name, g}]; "no" tidak boleh berubah
+  next_no int not null default 1,        -- nomor berikutnya untuk murid baru; tidak pernah turun
   created_at timestamptz not null default now()
 );
 
@@ -53,6 +57,27 @@ create table if not exists public.credentials (
   user_id uuid primary key references public.profiles on delete cascade,
   password text not null
 );
+
+-- Guru memegang kelas yang ditugaskan admin. Satu guru boleh banyak kelas, satu kelas boleh banyak guru.
+create table if not exists public.class_teachers (
+  class_id uuid not null references public.classes on delete cascade,
+  teacher_id uuid not null references public.profiles on delete cascade,
+  primary key (class_id, teacher_id)
+);
+
+-- Peningkatan dari versi lama (kelas dimiliki guru pembuatnya). Aman dijalankan ulang: hanya bekerja
+-- bila kolom classes.owner masih ada. Kelas lama ditugaskan ke pemilik lamanya, lalu kolom dibuang.
+do $$ begin
+  if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'classes' and column_name = 'owner') then
+    alter table public.classes add column if not exists next_no int not null default 1;
+    update public.classes set next_no = coalesce((select max((m->>'no')::int) + 1 from jsonb_array_elements(members) m), 1);
+    insert into public.class_teachers (class_id, teacher_id)
+      select c.id, c.owner from public.classes c join public.profiles p on p.id = c.owner and p.kind = 'guru'
+      on conflict do nothing;
+    drop policy if exists "kelas: sekolah sendiri" on public.classes;
+    alter table public.classes drop column owner;
+  end if;
+end $$;
 
 create table if not exists public.sessions (
   id uuid primary key default gen_random_uuid(),
@@ -100,16 +125,24 @@ create or replace function public.can_see_school(s uuid) returns boolean
 language sql stable security definer set search_path = public as $$
   select public.is_super() or (s is not null and s = public.my_school()) $$;
 
--- Kolom school_id pada kelas dan sesi terisi otomatis dari sekolah pembuatnya.
-alter table public.classes alter column school_id set default public.my_school();
+-- Admin sekolah mengakses semua kelas di sekolahnya; guru hanya kelas yang ditugaskan kepadanya.
+create or replace function public.has_class_access(c uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from classes k
+    where k.id = c
+      and ((public.is_admin() and public.can_see_school(k.school_id))
+           or exists (select 1 from class_teachers t where t.class_id = k.id and t.teacher_id = auth.uid())))
+$$;
+
 alter table public.sessions alter column school_id set default public.my_school();
-alter table public.classes alter column owner set default auth.uid();
 
 /* ------------------------------------------------------------------ */
 /* Row Level Security                                                  */
 /* ------------------------------------------------------------------ */
 alter table public.schools enable row level security;
 alter table public.classes enable row level security;
+alter table public.class_teachers enable row level security;
 alter table public.profiles enable row level security;
 alter table public.credentials enable row level security;
 alter table public.sessions enable row level security;
@@ -128,13 +161,17 @@ create policy "profil: ubah sendiri" on public.profiles for update to authentica
   using (id = auth.uid() and public.my_kind() <> 'siswa')
   with check (id = auth.uid());
 
--- Kelas dan sesi: guru hanya miliknya sendiri; admin sekolah melihat semua di sekolahnya.
--- Admin pusat bisa melihat semua, tetapi tidak membuat kelas (tidak punya sekolah).
+-- Kelas: hanya dibaca langsung; membuat, mengubah, dan menghapus lewat fungsi admin_*.
+-- Guru membaca kelas yang ditugaskan; admin sekolah semua kelas di sekolahnya; admin pusat semua.
 drop policy if exists "kelas: sekolah sendiri" on public.classes;
-create policy "kelas: sekolah sendiri" on public.classes for all to authenticated
-  using (public.can_see_school(school_id) and (owner = auth.uid() or public.is_admin()))
-  with check (school_id = public.my_school() and (owner = auth.uid() or public.is_admin()));
+drop policy if exists "kelas: baca" on public.classes;
+create policy "kelas: baca" on public.classes for select to authenticated using (public.has_class_access(id));
 
+drop policy if exists "penugasan: baca" on public.class_teachers;
+create policy "penugasan: baca" on public.class_teachers for select to authenticated
+  using (teacher_id = auth.uid() or (public.is_admin() and public.has_class_access(class_id)));
+
+-- Sesi: dibuat lewat create_session; pemiliknya hanya boleh membuka/menutup dan menghapus.
 drop policy if exists "sesi: sekolah sendiri" on public.sessions;
 create policy "sesi: sekolah sendiri" on public.sessions for all to authenticated
   using (public.can_see_school(school_id) and (owner = auth.uid() or public.is_admin()))
@@ -151,8 +188,9 @@ grant select on public.schools to authenticated;
 grant insert, update on public.schools to authenticated;
 grant select on public.profiles to authenticated;
 grant update (name, title, city, letterhead, onboarded) on public.profiles to authenticated;
-grant select, insert, update, delete on public.classes, public.sessions to authenticated;
-grant select on public.responses to authenticated;
+grant select on public.classes, public.class_teachers, public.responses to authenticated;
+grant select, delete on public.sessions to authenticated;
+grant update (closed, closes_at) on public.sessions to authenticated;
 
 /* ------------------------------------------------------------------ */
 /* Pembuatan akun (internal)                                           */
@@ -305,10 +343,77 @@ begin
   select * into t from public.profiles where id = p_user;
   if not found or not public._in_scope(a, t.school_id) then raise exception 'Akun tidak ditemukan.'; end if;
   if p_user = a.id then raise exception 'Anda tidak bisa menghapus akun Anda sendiri.'; end if;
-  -- Kelas dan sesi milik akun yang dihapus dipindahkan ke admin ini, bukan ikut terhapus.
-  update public.classes set owner = a.id where owner = p_user;
+  -- Sesi milik akun yang dihapus dipindahkan ke admin ini, bukan ikut terhapus.
+  -- Penugasan kelasnya hilang otomatis; kelas itu sendiri tidak terpengaruh.
   update public.sessions set owner = a.id where owner = p_user;
   delete from auth.users where id = p_user;
+end $$;
+
+-- Membuat atau mengubah kelas beserta daftar murid dan guru pengampunya, dalam satu langkah.
+-- Nomor murid dikunci di sini: murid lama mempertahankan nomornya, murid baru mendapat nomor
+-- berikutnya, dan nomor yang pernah dipakai tidak dipakai ulang (akun siswa menaut ke nomor ini).
+-- p_teachers kosong (null) = penugasan guru tidak diubah.
+create or replace function public.admin_save_class(p_id uuid, p_school uuid, p_name text, p_members jsonb, p_teachers uuid[] default null) returns json
+language plpgsql security definer set search_path = public as $$
+declare
+  a public.profiles := public._need_admin(); c public.classes; cid uuid; sch uuid; m jsonb;
+  old_nos int[] := '{}'; nos int[] := '{}'; res jsonb := '[]'; nxt int := 1; n int; orphan text;
+begin
+  if trim(coalesce(p_name, '')) = '' then raise exception 'Isi nama kelas.'; end if;
+  if p_members is null or jsonb_typeof(p_members) <> 'array' then raise exception 'Daftar murid tidak valid.'; end if;
+  if pg_column_size(p_members) > 200000 then raise exception 'Daftar murid terlalu besar.'; end if;
+
+  if p_id is not null then
+    select * into c from public.classes where id = p_id;
+    if not found or not public._in_scope(a, c.school_id) then raise exception 'Kelas tidak ditemukan.'; end if;
+    cid := c.id; sch := c.school_id;
+    select coalesce(array_agg((x->>'no')::int), '{}') into old_nos from jsonb_array_elements(c.members) x;
+    nxt := greatest(c.next_no, coalesce((select max(v) + 1 from unnest(old_nos) v), 1));
+  else
+    sch := coalesce(a.school_id, p_school);
+    if sch is null or not exists (select 1 from public.schools where id = sch) then raise exception 'Pilih sekolah untuk kelas ini.'; end if;
+  end if;
+
+  for m in select * from jsonb_array_elements(p_members) loop
+    continue when trim(coalesce(m->>'name', '')) = '';
+    if coalesce(m->>'no', '') ~ '^[0-9]+$' and (m->>'no')::int = any(old_nos) and not ((m->>'no')::int = any(nos)) then
+      n := (m->>'no')::int;
+    else
+      n := nxt; nxt := nxt + 1;
+    end if;
+    nos := nos || n;
+    res := res || jsonb_build_object('no', n, 'name', trim(m->>'name'), 'g', case when m->>'g' in ('L', 'P') then m->>'g' else '' end);
+  end loop;
+  if jsonb_array_length(res) = 0 then raise exception 'Daftar kelas perlu minimal satu murid.'; end if;
+
+  if p_id is not null then
+    select string_agg(pr.name, ', ') into orphan from public.profiles pr
+      where pr.class_id = cid and pr.kind = 'siswa' and not (pr.member_no = any(nos));
+    if orphan is not null then
+      raise exception 'Murid berikut sudah punya akun. Hapus akunnya dulu sebelum mengeluarkannya dari kelas: %', orphan;
+    end if;
+    update public.classes set name = trim(p_name), members = res, next_no = nxt where id = cid;
+  else
+    insert into public.classes (school_id, name, members, next_no) values (sch, trim(p_name), res, nxt) returning id into cid;
+  end if;
+
+  if p_teachers is not null then
+    delete from public.class_teachers where class_id = cid;
+    insert into public.class_teachers (class_id, teacher_id)
+      select cid, pr.id from public.profiles pr where pr.id = any(p_teachers) and pr.kind = 'guru' and pr.school_id = sch;
+  end if;
+  return json_build_object('id', cid);
+end $$;
+
+create or replace function public.admin_delete_class(p_id uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare a public.profiles := public._need_admin(); c public.classes; n int;
+begin
+  select * into c from public.classes where id = p_id;
+  if not found or not public._in_scope(a, c.school_id) then raise exception 'Kelas tidak ditemukan.'; end if;
+  select count(*) into n from public.profiles where class_id = p_id and kind = 'siswa';
+  if n > 0 then raise exception 'Kelas ini masih punya % akun siswa. Hapus akun siswanya dulu.', n; end if;
+  delete from public.classes where id = p_id;   -- sesi lama tetap ada (daftar murid sudah tersalin di sesi)
 end $$;
 
 create or replace function public.admin_overview() returns json
@@ -352,17 +457,53 @@ begin
   update public.profiles set must_change = false where id = auth.uid();
 end $$;
 
--- Guru mengisi jawaban contoh pada sesi miliknya sendiri (untuk "sesi contoh").
-create or replace function public.owner_add_responses(p_session uuid, p_rows jsonb) returns void
+drop function if exists public.owner_add_responses(uuid, jsonb);   -- diganti create_sample
+
+/* ------------------------------------------------------------------ */
+/* Fungsi untuk guru dan admin sekolah                                 */
+/* ------------------------------------------------------------------ */
+-- Nama kelas dan daftar murid diambil dari database, bukan dari kiriman aplikasi,
+-- dan hanya untuk kelas yang boleh diakses pemanggil.
+create or replace function public.create_session(p_class uuid, p_type text, p_config jsonb, p_days int) returns json
 language plpgsql security definer set search_path = public as $$
-declare s public.sessions; r jsonb;
+declare p public.profiles; c public.classes; s public.sessions;
 begin
-  select * into s from public.sessions where id = p_session;
-  if not found or s.owner <> auth.uid() then raise exception 'Sesi tidak ditemukan.'; end if;
+  select * into p from public.profiles where id = auth.uid();
+  if not found or p.kind not in ('guru', 'admin') then raise exception 'Hanya guru atau admin yang bisa membuat sesi.'; end if;
+  if p.school_id is null then raise exception 'Admin pusat tidak membuat sesi. Pakai akun admin sekolah atau guru.'; end if;
+  if not public.has_class_access(p_class) then raise exception 'Kelas tidak ditemukan atau belum ditugaskan kepada Anda.'; end if;
+  if coalesce(length(p_type), 0) not between 1 and 40 then raise exception 'Jenis asesmen tidak dikenal.'; end if;
+  if p_days is null or p_days < 1 or p_days > 90 then raise exception 'Batas pengisian 1 sampai 90 hari.'; end if;
+  select * into c from public.classes where id = p_class;
+  insert into public.sessions (school_id, owner, class_id, class_name, type, config, roster, closes_at)
+  values (c.school_id, auth.uid(), c.id, c.name, p_type, coalesce(p_config, '{}'), c.members, now() + make_interval(days => p_days))
+  returning * into s;
+  return to_json(s);
+end $$;
+
+-- Sesi contoh dengan kelas contoh dan jawaban tiruan, supaya guru bisa melihat bentuk laporan.
+-- Kelas contoh ditugaskan hanya kepada pemanggil.
+create or replace function public.create_sample(p_type text, p_config jsonb, p_class_name text, p_members jsonb, p_rows jsonb) returns json
+language plpgsql security definer set search_path = public as $$
+declare p public.profiles; c public.classes; s json; r jsonb; mx int;
+begin
+  select * into p from public.profiles where id = auth.uid();
+  if not found or p.kind not in ('guru', 'admin') or p.school_id is null then raise exception 'Hanya guru atau admin sekolah yang bisa membuat sesi contoh.'; end if;
+  if pg_column_size(p_members) + pg_column_size(p_rows) > 300000 then raise exception 'Data contoh terlalu besar.'; end if;
+  select k.* into c from public.classes k
+    join public.class_teachers t on t.class_id = k.id and t.teacher_id = p.id
+    where k.name = p_class_name and k.school_id = p.school_id limit 1;
+  if not found then
+    select coalesce(max((x->>'no')::int), 0) + 1 into mx from jsonb_array_elements(p_members) x;
+    insert into public.classes (school_id, name, members, next_no) values (p.school_id, p_class_name, p_members, mx) returning * into c;
+    insert into public.class_teachers (class_id, teacher_id) values (c.id, p.id);
+  end if;
+  s := public.create_session(c.id, p_type, p_config, 14);
   for r in select * from jsonb_array_elements(p_rows) loop
-    insert into public.responses (session_id, member_no, answers) values (p_session, (r->>'no')::int, r->'answers')
-    on conflict (session_id, member_no) do nothing;
+    insert into public.responses (session_id, member_no, answers) values ((s->>'id')::uuid, (r->>'no')::int, r->'answers')
+    on conflict do nothing;
   end loop;
+  return s;
 end $$;
 
 /* ------------------------------------------------------------------ */
@@ -410,12 +551,14 @@ end $$;
 /* Hak menjalankan fungsi                                              */
 /* ------------------------------------------------------------------ */
 revoke execute on all functions in schema public from public, anon, authenticated;
-grant execute on function public.my_school(), public.my_kind(), public.is_admin(), public.is_super(), public.can_see_school(uuid) to authenticated;
+grant execute on function public.my_school(), public.my_kind(), public.is_admin(), public.is_super(), public.can_see_school(uuid), public.has_class_access(uuid) to authenticated;
 grant execute on function
   public.admin_create_user(text, text, text, text, uuid, text, uuid, int),
   public.admin_create_students(uuid), public.admin_users(), public.admin_set_password(uuid, text),
   public.admin_delete_user(uuid), public.admin_overview(),
-  public.change_my_password(text, text), public.owner_add_responses(uuid, jsonb),
+  public.admin_save_class(uuid, uuid, text, jsonb, uuid[]), public.admin_delete_class(uuid),
+  public.create_session(uuid, text, jsonb, int), public.create_sample(text, jsonb, text, jsonb, jsonb),
+  public.change_my_password(text, text),
   public.student_sessions(), public.student_session(uuid), public.submit_response(uuid, jsonb)
 to authenticated;
 

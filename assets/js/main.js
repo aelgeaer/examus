@@ -18,7 +18,7 @@ const ROUTES = [
   ["/kenalan", onboarding, "staff"],
   ["/dasbor", dashboard, "staff"],
   ["/kelas", classes, "staff"],
-  ["/kelas/:id", classEdit, "staff"],
+  ["/kelas/:id", classEdit, "admin"],
   ["/mulai/:type", start, "staff"],
   ["/sesi/:id", session, "staff"],
   ["/sesi/:id/hasil", report, "staff"],

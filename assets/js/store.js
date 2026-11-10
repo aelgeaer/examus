@@ -53,20 +53,16 @@ async function makeSupabase() {
       return prof(must(await sb.from("profiles").update(row).eq("id", await userId()).select(PROFILE).single()));
     },
 
-    async listClasses() { return must(await sb.from("classes").select("*").eq("owner", await userId()).order("created_at", { ascending: false })).map(cls); },
+    // Kelas hanya dibaca di sini; membuat dan mengubahnya lewat fungsi admin. Aturan akses database
+    // menentukan isinya: guru melihat kelas yang ditugaskan, admin semua kelas di sekolahnya.
+    async listClasses() { return must(await sb.from("classes").select("*").order("name")).map(cls); },
     async getClass(id) { return cls(must(await sb.from("classes").select("*").eq("id", id).maybeSingle())); },
-    async saveClass({ id, name, members }) {
-      if (id) return cls(must(await sb.from("classes").update({ name, members }).eq("id", id).select().single()));
-      return cls(must(await sb.from("classes").insert({ name, members }).select().single()));
-    },
-    async deleteClass(id) { must(await sb.from("classes").delete().eq("id", id)); },
+    async classTeachers(classId) { return must(await sb.from("class_teachers").select("teacher_id").eq("class_id", classId)).map((r) => r.teacher_id); },
 
     async listSessions() { return must(await sb.from("sessions").select("*, responses(count)").eq("owner", await userId()).order("created_at", { ascending: false })).map(sess); },
     async getSession(id) { return sess(must(await sb.from("sessions").select("*, responses(count)").eq("id", id).maybeSingle())); },
     async createSession({ classId, type, config, days }) {
-      const c = await this.getClass(classId);
-      if (!c) throw new Error("Daftar kelas tidak ditemukan.");
-      return sess(must(await sb.from("sessions").insert({ class_id: classId, class_name: c.name, type, config, roster: c.members, closes_at: new Date(Date.now() + days * DAY).toISOString() }).select().single()));
+      return sess(must(await sb.rpc("create_session", { p_class: classId, p_type: type, p_config: config, p_days: days })));
     },
     async setClosed(id, closed) {
       const row = { closed };
@@ -76,11 +72,10 @@ async function makeSupabase() {
     async deleteSession(id) { must(await sb.from("sessions").delete().eq("id", id)); },
     async listResponses(sessionId) { return must(await sb.from("responses").select("member_no, answers, created_at").eq("session_id", sessionId)).map((r) => ({ no: r.member_no, answers: r.answers, createdAt: r.created_at })); },
     async addSample(type) {
-      let c = (await this.listClasses()).find((x) => x.name === SAMPLE_CLASS.name);
-      if (!c) c = await this.saveClass({ name: SAMPLE_CLASS.name, members: SAMPLE_CLASS.members });
-      const s = await this.createSession({ classId: c.id, type, config: sampleConfig(type), days: 14 });
-      must(await sb.rpc("owner_add_responses", { p_session: s.id, p_rows: sampleAnswers(type).map((r) => ({ no: r.no, answers: r.answers })) }));
-      return s;
+      return sess(must(await sb.rpc("create_sample", {
+        p_type: type, p_config: sampleConfig(type), p_class_name: SAMPLE_CLASS.name, p_members: SAMPLE_CLASS.members,
+        p_rows: sampleAnswers(type).map((r) => ({ no: r.no, answers: r.answers })),
+      })));
     },
 
     // Siswa
@@ -91,7 +86,11 @@ async function makeSupabase() {
     // Admin
     async admin() { return must(await sb.rpc("admin_overview")); },
     async adminUsers() { return must(await sb.rpc("admin_users")); },
-    async adminClasses() { return must(await sb.from("classes").select("id, name, members, school_id").order("name")).map((c) => ({ id: c.id, name: c.name, members: c.members, schoolId: c.school_id })); },
+    async adminClasses() { return this.listClasses(); },
+    async adminSaveClass({ id, schoolId, name, members, teachers }) {
+      return must(await sb.rpc("admin_save_class", { p_id: id || null, p_school: schoolId || null, p_name: name, p_members: members, p_teachers: teachers ?? null }));
+    },
+    async adminDeleteClass(id) { must(await sb.rpc("admin_delete_class", { p_id: id })); },
     async adminCreateUser(u) {
       return must(await sb.rpc("admin_create_user", { p_username: u.username, p_password: u.password, p_name: u.name, p_kind: u.kind, p_school: u.schoolId || null, p_title: u.title || null, p_class: u.classId || null, p_member: u.memberNo ?? null }));
     },

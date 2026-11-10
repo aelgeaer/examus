@@ -10,7 +10,7 @@ export function header(user, active = "") {
     : user.kind === "siswa"
       ? `<a href="#/siswa"${on("dasbor")}>Angket</a><a href="#/akun"${on("akun")}>Akun</a>`
       : user.isSuper
-        ? `<a href="#/admin"${on("admin")}>Admin</a><a href="#/akun"${on("akun")}>Akun</a>`
+        ? `<a href="#/admin"${on("admin")}>Admin</a><a href="#/kelas"${on("kelas")}>Kelas</a><a href="#/akun"${on("akun")}>Akun</a>`
         : `<a href="#/dasbor"${on("dasbor")}>Dasbor</a><a href="#/kelas"${on("kelas")}>Kelas</a><a href="#/akun"${on("akun")}>Akun</a>${user.isAdmin ? `<a href="#/admin"${on("admin")}>Admin</a>` : ""}`;
   return `<header class="site-header wrap">
     <a class="lockup" href="#/" aria-label="Examus by prepod, beranda"><img src="assets/img/logo.svg" alt="" width="40" height="40"><span class="words"><span class="name">Examus</span><span class="by">by prepod</span></span></a>
@@ -35,7 +35,7 @@ const FAQ = [
   ["Siapa yang bisa melihat hasilnya?", "Hanya guru yang membuat sesi (dan admin sekolahnya). Murid tidak melihat jawaban teman maupun hasil kelas, dan data tiap sekolah terpisah dari sekolah lain."],
   ["Apakah hasilnya sebuah diagnosis?", "Bukan. Examus adalah alat pemetaan dan skrining awal. Hasilnya membantu pertimbangan profesional Anda dan tidak menggantikan pemeriksaan klinis oleh psikolog."],
   ["Seperti apa bentuk laporannya?", "Ringkasan kelas, sosiogram, tabel per murid, dan saran tindak lanjut. Laporan bisa dicetak ke PDF dengan kop sekolah, diunduh sebagai CSV untuk Excel, atau disimpan sebagai gambar."],
-  ["Bagaimana cara mulai?", "Minta admin sekolah membuatkan akun, masuk dengan nama akun dan kata sandi dari admin, tempel daftar kelas, lalu pilih asesmen. Murid yang sudah punya akun langsung melihat angketnya. Anda juga bisa mencoba dulu dengan kelas contoh yang sudah berisi jawaban."],
+  ["Bagaimana cara mulai?", "Admin sekolah membuatkan akun Anda dan menugaskan kelas yang Anda ampu. Masuk dengan nama akun dan kata sandi dari admin, pilih kelas, lalu pilih asesmen. Murid yang sudah punya akun langsung melihat angketnya. Anda juga bisa mencoba dulu dengan kelas contoh yang sudah berisi jawaban."],
 ];
 
 export function landing({ user }) {
@@ -77,7 +77,7 @@ export function landing({ user }) {
             <div class="row"><span>2&nbsp; Bella Kusuma</span><span class="tag">P</span></div>
             <div class="row"><span>3&nbsp; Cahya Ningrum</span><span class="tag">P</span></div>
           </div></div>
-        <h3>Tempel daftar nama</h3><p>Salin dari Excel atau WhatsApp. Nomor urut dan L/P dikenali otomatis.</p></li>
+        <h3>Admin menyiapkan kelas</h3><p>Admin sekolah menempel daftar nama dari Excel atau WhatsApp, lalu memilih guru pengampu tiap kelas.</p></li>
       <li><div class="tile t2"><div class="mock" aria-hidden="true">
             <div class="url">Angket Kelas 8C</div><div class="fake-btn">Mulai mengisi</div>
           </div></div>
@@ -100,7 +100,7 @@ export function landing({ user }) {
   </div></section>
 
   <section class="section closing"><div class="wrap"><div class="closing-card">
-    <div><h2>Coba dengan satu kelas dulu.</h2><p>Masuk dengan akun dari admin, tempel daftar nama, dan buka sesinya. Murid langsung melihat angketnya di akun mereka.</p><a class="btn white" href="${cta}">Buat sesi pertama</a></div>
+    <div><h2>Coba dengan satu kelas dulu.</h2><p>Masuk dengan akun dari admin, pilih kelas yang Anda ampu, dan buka sesinya. Murid langsung melihat angketnya di akun mereka.</p><a class="btn white" href="${cta}">Buat sesi pertama</a></div>
     <div class="closing-rings" aria-hidden="true"></div>
   </div></div></section>
   ${footer()}`;
@@ -165,13 +165,13 @@ const LEGAL = {
     <p>Dengan memakai Examus, Anda menyetujui hal-hal berikut.</p>
     <h2>Pemakaian</h2><ul><li>Examus dipakai oleh pendidik dan tenaga profesional sekolah untuk keperluan layanan bimbingan dan pembelajaran.</li><li>Anda memakai Examus dengan izin sekolah dan memberi tahu murid serta orang tua tentang tujuan asesmen, sesuai aturan sekolah Anda.</li><li>Nama akun dan kata sandi hanya dipakai oleh pemiliknya dan tidak dibagikan kepada orang lain.</li></ul>
     <h2>Hasil asesmen</h2><ul><li>Hasil Examus adalah bahan pertimbangan, bukan diagnosis, bukan dasar hukuman, dan tidak menentukan nilai atau masa depan murid.</li><li>Laporan perorangan dan sosiogram bersifat rahasia dan hanya untuk guru yang berwenang.</li></ul>
-    <h2>Tanggung jawab</h2><p>Anda bertanggung jawab atas keakuratan daftar kelas yang dimasukkan dan atas cara hasil asesmen digunakan di sekolah.</p>` },
+    <h2>Tanggung jawab</h2><p>Admin bertanggung jawab atas keakuratan daftar kelas yang dimasukkan, dan guru atas cara hasil asesmen digunakan di sekolah.</p>` },
   privasi: { title: "Kebijakan privasi", body: `
     <p>Halaman ini menjelaskan data apa yang disimpan Examus dan untuk apa.</p>
     <h2>Data yang disimpan</h2><ul><li>Akun guru, admin, dan murid: nama akun, nama, dan sekolah. Guru juga bisa mengisi peran dan kota.</li><li>Kata sandi: sampai pengguna menggantinya, kata sandi awal dari admin bisa dilihat admin sekolah supaya bisa dibagikan atau diatur ulang. Setelah diganti, hanya tersisa bentuk terenkripsi yang tidak bisa dibaca siapa pun.</li><li>Daftar kelas: nama murid dan jenis kelamin (L/P).</li><li>Jawaban murid atas angket yang Anda jalankan.</li></ul>
     <p>Examus tidak meminta tanggal lahir, alamat, nomor telepon, atau foto murid.</p>
-    <h2>Pemakaian data</h2><ul><li>Data murid hanya dipakai untuk menyusun laporan bagi guru yang membuat sesi.</li><li>Data tidak dijual dan tidak dipakai untuk iklan.</li><li>Anda dapat menghapus sesi dan daftar kelas kapan saja; jawaban di dalamnya ikut terhapus.</li></ul>
-    <h2>Penyimpanan</h2><p>Data tersimpan di database dan dipisahkan per sekolah: akun sebuah sekolah tidak dapat membaca data sekolah lain. Daftar kelas, sesi, dan jawaban hanya dapat dibaca oleh guru pemiliknya dan admin sekolah yang bersangkutan.</p>` },
+    <h2>Pemakaian data</h2><ul><li>Data murid hanya dipakai untuk menyusun laporan bagi guru yang membuat sesi.</li><li>Data tidak dijual dan tidak dipakai untuk iklan.</li><li>Guru dapat menghapus sesi miliknya dan admin dapat menghapus daftar kelas kapan saja; jawaban di dalam sesi ikut terhapus bersama sesinya.</li></ul>
+    <h2>Penyimpanan</h2><p>Data tersimpan di database dan dipisahkan per sekolah: akun sebuah sekolah tidak dapat membaca data sekolah lain. Daftar kelas hanya dapat dibaca guru yang ditugaskan dan admin sekolah yang bersangkutan. Sesi dan jawaban hanya dapat dibaca guru pembuatnya dan admin sekolah tersebut.</p>` },
 };
 export function legal({ user, params }) {
   const d = LEGAL[params.doc];

@@ -92,30 +92,34 @@ export async function dashboard({ user }) {
 }
 
 /* ---------------- Daftar kelas ---------------- */
-// Murid yang sudah ada mempertahankan nomornya (akun murid menautkan ke nomor ini); yang baru mendapat nomor berikutnya.
-const numbered = (list) => { let max = Math.max(0, ...list.map((m) => m.no || 0)); return list.map((m) => ({ ...m, no: m.no || ++max })); };
-
+// Kelas dan daftar murid hanya dibuat dan diubah admin. Guru melihat kelas yang ditugaskan kepadanya.
 export async function classes({ user }) {
-  const list = await store.listClasses();
-  return {
-    title: "Kelas",
-    html: `${header(user, "kelas")}<main class="page"><div class="narrow">
-      <h1 class="page-title">Kelas</h1>
-      <p class="page-sub">Satu daftar nama bisa dipakai untuk banyak asesmen.</p>
-      <div class="list" style="margin-top:1.6rem">${list.map((c) => `<a class="item" href="#/kelas/${c.id}"><span><b>${esc(c.name)}</b><br><span class="meta">${c.members.length} murid</span></span><span aria-hidden="true">›</span></a>`).join("") || `<div class="card"><p>Belum ada daftar kelas. Buat satu dengan menempel nama dari Excel atau WhatsApp.</p></div>`}</div>
-      <p style="margin-top:1rem"><a class="btn primary" href="#/kelas/baru">Buat daftar kelas</a></p>
-    </div></main>`,
-  };
+  const [list, schools] = await Promise.all([store.listClasses(), user.isSuper ? store.schools() : []]);
+  const schoolOf = (id) => schools.find((s) => s.id === id)?.name || "";
+  const body = user.isAdmin
+    ? `<p class="page-sub">Buat kelas, masukkan daftar murid, dan pilih guru yang memegang tiap kelas.</p>
+      <div class="list" style="margin-top:1.6rem">${list.map((c) => `<a class="item" href="#/kelas/${c.id}"><span><b>${esc(c.name)}</b><br><span class="meta">${c.members.length} murid${user.isSuper ? ` · ${esc(schoolOf(c.schoolId))}` : ""}</span></span><span aria-hidden="true">›</span></a>`).join("") || `<div class="card"><p>Belum ada kelas. Buat satu dengan menempel nama murid dari Excel atau WhatsApp.</p></div>`}</div>
+      <p style="margin-top:1rem"><a class="btn primary" href="#/kelas/baru">Buat kelas</a></p>`
+    : `<p class="page-sub">Kelas yang ditugaskan admin sekolah kepada Anda. Daftar murid diatur oleh admin.</p>
+      <div class="stack" style="margin-top:1.6rem">${list.map((c) => `<details class="card"><summary style="cursor:pointer;font-weight:500">${esc(c.name)} <span class="muted">(${c.members.length} murid)</span></summary><ol style="margin:.7rem 0 0 1.2rem">${c.members.map((m) => `<li value="${m.no}">${esc(m.name)}${m.g ? ` <span class="muted small">${m.g}</span>` : ""}</li>`).join("")}</ol></details>`).join("") || `<div class="card"><p>Belum ada kelas yang ditugaskan kepada Anda. Minta admin sekolah menambahkan Anda sebagai guru di sebuah kelas.</p></div>`}</div>`;
+  return { title: "Kelas", html: `${header(user, "kelas")}<main class="page"><div class="narrow"><h1 class="page-title">Kelas</h1>${body}</div></main>` };
 }
 
-export async function classEdit({ user, params, query }) {
-  const existing = params.id === "baru" ? null : await store.getClass(params.id);
-  if (params.id !== "baru" && !existing) return { html: `${header(user, "kelas")}<main class="page"><div class="narrow"><h1 class="page-title">Kelas tidak ditemukan</h1><p style="margin-top:1rem"><a class="btn" href="#/kelas">Ke daftar kelas</a></p></div></main>` };
+// Hanya admin. Nomor murid dikunci di server: murid lama mempertahankan nomornya, murid baru diberi nomor berikutnya.
+export async function classEdit({ user, params }) {
+  const isNew = params.id === "baru";
+  const existing = isNew ? null : await store.getClass(params.id);
+  if (!isNew && !existing) return { html: `${header(user, "kelas")}<main class="page"><div class="narrow"><h1 class="page-title">Kelas tidak ditemukan</h1><p style="margin-top:1rem"><a class="btn" href="#/kelas">Ke daftar kelas</a></p></div></main>` };
+  const [schools, users, assigned] = await Promise.all([user.isSuper ? store.schools() : [], store.adminUsers(), isNew ? [] : store.classTeachers(existing.id)]);
+  const gurus = users.filter((u) => u.kind === "guru");
+  const chosen = new Set(assigned);
   let members = existing ? existing.members.map((m) => ({ no: m.no, name: m.name, g: m.g || "" })) : [];
-  const next = query.get("lanjut");
   const html = `${header(user, "kelas")}<main class="page"><div class="narrow">
     <a class="back" href="#/kelas">← Semua kelas</a>
-    <h1 class="page-title">${existing ? "Ubah daftar kelas" : "Buat daftar kelas"}</h1>
+    <h1 class="page-title">${existing ? "Ubah kelas" : "Buat kelas"}</h1>
+    ${user.isSuper ? (isNew
+      ? `<label class="field"><span>Sekolah</span><select id="c-school" class="btn">${schools.map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join("")}</select></label>`
+      : `<p class="muted">Sekolah: ${esc(schools.find((s) => s.id === existing.schoolId)?.name || "-")}</p>`) : ""}
     <label class="field"><span>Nama kelas</span><input type="text" id="c-name" value="${esc(existing?.name || "")}" placeholder="Misalnya: Kelas 8C"></label>
     <div class="card soft" style="margin-top:1.4rem">
       <label class="field" style="margin-top:0"><span>Tambah banyak nama sekaligus</span>
@@ -126,13 +130,25 @@ export async function classEdit({ user, params, query }) {
     <div class="spread" style="margin-top:1.8rem"><h2 class="sec-h" style="margin:0">Murid <span class="muted" id="c-count"></span></h2><span class="err" id="c-warn" style="margin:0"></span></div>
     <div id="c-members" style="margin-top:.8rem"></div>
     <button class="btn sm" id="c-add" style="margin-top:.7rem">Tambah satu murid</button>
+    <p class="muted small" style="margin-top:.6rem">Nomor di sebelah kiri tetap untuk murid yang sudah ada, supaya akun murid dan sesi lama tidak tertukar. Murid yang sudah punya akun tidak bisa dihapus dari daftar sebelum akunnya dihapus.</p>
+    <h2 class="sec-h">Guru pengampu</h2>
+    <p class="muted">Guru yang dicentang bisa melihat kelas ini dan membuat sesi asesmen untuknya. Satu guru boleh memegang banyak kelas.</p>
+    <div class="chips" id="c-teachers" style="margin-top:.7rem"></div>
     <p class="err" id="c-err" role="alert"></p>
-    <div class="rowflex" style="margin-top:1rem"><button class="btn primary" id="c-save">Simpan daftar kelas</button>${existing ? `<button class="btn danger" id="c-del">Hapus kelas</button>` : ""}</div>
+    <div class="rowflex" style="margin-top:1rem"><button class="btn primary" id="c-save">Simpan kelas</button>${existing ? `<button class="btn danger" id="c-del">Hapus kelas</button>` : ""}</div>
   </div></main>`;
   return {
-    title: existing ? existing.name : "Buat daftar kelas", html,
+    title: existing ? existing.name : "Buat kelas", html,
     mount(root) {
       const box = $("#c-members", root);
+      const school = () => existing?.schoolId || (user.isSuper ? $("#c-school", root).value : user.schoolId);
+      const drawTeachers = () => {
+        const list = gurus.filter((g) => g.schoolId === school());
+        $("#c-teachers", root).innerHTML = list.map((g) => `<label><input type="checkbox" value="${g.id}"${chosen.has(g.id) ? " checked" : ""}><span>${esc(g.name || g.username)}</span></label>`).join("") || `<p class="muted">Belum ada akun guru di sekolah ini. Buat dulu di Dasbor admin.</p>`;
+      };
+      $("#c-teachers", root).addEventListener("change", (e) => { e.target.checked ? chosen.add(e.target.value) : chosen.delete(e.target.value); });
+      $("#c-school", root)?.addEventListener("change", () => { chosen.clear(); drawTeachers(); });
+
       const draw = () => {
         box.innerHTML = members.map((m, i) => `<div class="member" data-i="${i}"><span class="no">${m.no ?? "•"}</span><input type="text" value="${esc(m.name)}" aria-label="Nama murid ${i + 1}"><span class="lp" role="group" aria-label="Jenis kelamin"><button type="button" data-g="L" aria-pressed="${m.g === "L"}">L</button><button type="button" data-g="P" aria-pressed="${m.g === "P"}">P</button></span><button type="button" class="x" aria-label="Hapus ${esc(m.name)}">×</button></div>`).join("") || `<p class="muted">Belum ada nama. Tempel daftar di atas atau tambah satu per satu.</p>`;
         $("#c-count", root).textContent = members.length || "";
@@ -148,24 +164,26 @@ export async function classEdit({ user, params, query }) {
       $("#c-read", root).addEventListener("click", () => {
         const found = parseRoster($("#c-paste", root).value);
         if (!found.length) { toast("Tidak ada nama yang terbaca"); return; }
-        members.push(...found); $("#c-paste", root).value = ""; draw(); toast(`${found.length} nama ditambahkan`);
+        members.push(...found.map((m) => ({ no: null, ...m }))); $("#c-paste", root).value = ""; draw(); toast(`${found.length} nama ditambahkan`);
       });
-      $("#c-add", root).addEventListener("click", () => { members.push({ name: "", g: "" }); draw(); $$(".member input", box).pop()?.focus(); });
-      $("#c-save", root).addEventListener("click", async () => {
+      $("#c-add", root).addEventListener("click", () => { members.push({ no: null, name: "", g: "" }); draw(); $$(".member input", box).pop()?.focus(); });
+      $("#c-save", root).addEventListener("click", async (e) => {
         const name = $("#c-name", root).value.trim(), err = $("#c-err", root);
         const clean = members.map((m) => ({ no: m.no, name: m.name.trim(), g: m.g })).filter((m) => m.name);
         if (!name) { err.textContent = "Isi nama kelas."; $("#c-name", root).focus(); return; }
         if (clean.length < 3) { err.textContent = "Daftar kelas perlu minimal 3 murid."; return; }
+        const teachers = gurus.filter((g) => g.schoolId === school() && chosen.has(g.id)).map((g) => g.id);
+        e.currentTarget.disabled = true; err.textContent = "";
         try {
-          const c = await store.saveClass({ id: existing?.id, name, members: numbered(clean) });
-          toast("Daftar kelas disimpan"); go(next ? `/${next}?kelas=${c.id}` : "/kelas");
-        } catch (ex) { err.textContent = ex.message; }
+          await store.adminSaveClass({ id: existing?.id, schoolId: school(), name, members: clean, teachers });
+          toast("Kelas disimpan"); go("/kelas");
+        } catch (ex) { err.textContent = ex.message; e.currentTarget.disabled = false; }
       });
       $("#c-del", root)?.addEventListener("click", async () => {
         if (!confirm(`Hapus ${existing.name}? Sesi yang sudah berjalan tidak ikut terhapus.`)) return;
-        await store.deleteClass(existing.id); toast("Kelas dihapus"); go("/kelas");
+        try { await store.adminDeleteClass(existing.id); toast("Kelas dihapus"); go("/kelas"); } catch (ex) { toast(ex.message); }
       });
-      draw();
+      drawTeachers(); draw();
     },
   };
 }
@@ -183,8 +201,8 @@ export async function start({ user, params, query }) {
     <h1 class="page-title">Mulai ${esc(a.name.toLowerCase())}</h1>
     <p class="page-sub">${esc(a.long)}</p>
     <h2 class="sec-h">Untuk kelas mana?</h2>
-    ${list.length ? `<div class="chips" role="radiogroup" aria-label="Kelas">${list.map((c) => `<label><input type="radio" name="kelas" value="${c.id}"${c.id === pre ? " checked" : ""}><span>${esc(c.name)} (${c.members.length})</span></label>`).join("")}</div><p style="margin-top:.7rem"><a href="#/kelas/baru?lanjut=mulai/${a.id}">Buat daftar kelas baru</a></p>`
-      : `<div class="card"><p>Belum ada daftar kelas. Buat dulu daftar nama muridnya; cukup tempel dari Excel atau WhatsApp.</p></div><p style="margin-top:.7rem"><a class="btn primary" href="#/kelas/baru?lanjut=mulai/${a.id}">Buat daftar kelas</a></p>`}
+    ${list.length ? `<div class="chips" role="radiogroup" aria-label="Kelas">${list.map((c) => `<label><input type="radio" name="kelas" value="${c.id}"${c.id === pre ? " checked" : ""}><span>${esc(c.name)} (${c.members.length})</span></label>`).join("")}</div>`
+      : user.isAdmin ? `<div class="card"><p>Belum ada kelas. Buat dulu daftar kelas dan murid di menu Kelas.</p></div><p style="margin-top:.7rem"><a class="btn primary" href="#/kelas/baru">Buat kelas</a></p>` : `<div class="card"><p>Belum ada kelas yang ditugaskan kepada Anda. Minta admin sekolah menambahkan Anda sebagai guru di sebuah kelas.</p></div>`}
     <h2 class="sec-h">${socio ? "Pertanyaan apa yang diajukan?" : "Isi angket"}</h2>
     ${socio ? SOCIO_VARIANTS.map((v, i) => `<label class="opt"><input type="radio" name="variant" value="${v.id}"${i === 0 ? " checked" : ""}><span class="t">${v.name}</span><span class="d">${v.desc}</span><ol>${v.questions.map((q) => `<li>${esc(q.text)}</li>`).join("")}</ol></label>`).join("")
       : `<div class="card"><p>${itemCount(a.id, {})} butir, satu butir per layar. Murid cukup mengetuk jawaban yang paling sesuai, kira-kira 5 menit, lewat akun masing-masing.</p></div>`}
@@ -387,7 +405,7 @@ export async function admin({ user }) {
       <div id="add-result" style="margin-top:1rem"></div>
     </details>
     <details class="card" id="bulk" style="margin-bottom:1rem"><summary style="cursor:pointer;font-weight:500">Buat akun untuk satu kelas sekaligus</summary>
-      <p class="muted" style="margin-top:.6rem">Membuat akun untuk semua murid di kelas yang belum punya akun. Nama akun dan kata sandi dibuat otomatis. Daftar kelas dibuat guru lebih dulu.</p>
+      <p class="muted" style="margin-top:.6rem">Membuat akun untuk semua murid di kelas yang belum punya akun. Nama akun dan kata sandi dibuat otomatis. Buat daftar kelas lebih dulu di menu Kelas.</p>
       <div class="rowflex" style="margin-top:.7rem"><select id="b-class" class="btn">${classList.map((c) => `<option value="${c.id}">${esc(className(c))} (${c.members.length} murid)</option>`).join("") || `<option value="">Belum ada kelas</option>`}</select><button class="btn dark" id="b-go">Buat akun murid</button></div>
       <div id="b-result" style="margin-top:1rem"></div>
     </details>
