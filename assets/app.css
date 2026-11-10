@@ -362,3 +362,18 @@ table.tbl { border-collapse: collapse; width: 100%; font-size: .93rem; }
   tr, .card { break-inside: avoid; }
 }
 .print-sign { display: none; }
+
+/* Menu akun di header */
+.usermenu { position: relative; margin-left: .4rem; }
+.usermenu summary { list-style: none; display: flex; align-items: center; gap: .6rem; cursor: pointer; padding: .25rem .5rem; border-radius: 999px; }
+.usermenu summary::-webkit-details-marker { display: none; }
+.usermenu summary:hover { background: var(--sky-soft); }
+.usermenu .avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--sky); border: 2px solid var(--ink); display: grid; place-items: center; font-weight: 600; flex: none; }
+.usermenu .who { display: flex; flex-direction: column; line-height: 1.2; text-align: left; }
+.usermenu .who b { font-weight: 600; font-size: .95rem; }
+.usermenu .who span { font-size: .85rem; color: var(--muted, #5a6b82); }
+.usermenu .caret { font-size: .8rem; }
+.usermenu .menu { position: absolute; right: 0; top: calc(100% + .4rem); min-width: 220px; background: #fff; border: 1px solid rgba(0,0,0,.12); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.12); padding: .4rem; z-index: 40; display: flex; flex-direction: column; }
+.usermenu .menu a, .usermenu .menu button { display: block; text-align: left; padding: .65rem .8rem; border-radius: 8px; background: none; border: 0; font: inherit; font-weight: 500; cursor: pointer; text-decoration: none; color: inherit; }
+.usermenu .menu a:hover, .usermenu .menu button:hover { background: var(--sky-soft); }
+@media (max-width: 640px) { .usermenu .who { display: none; } }

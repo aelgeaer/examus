@@ -17,7 +17,6 @@ export function onboarding({ user }) {
         <label class="field"><span>Nama lengkap</span><input type="text" name="name" value="${esc(user.name)}" autocomplete="name"><span class="hint">Boleh dengan gelar. Dipakai untuk sapaan dan tanda tangan laporan.</span></label>
         <div class="field"><span class="flabel" id="role-l">Peran di sekolah</span><div class="chips" role="radiogroup" aria-labelledby="role-l">${ROLES.map((r) => `<label><input type="radio" name="role" value="${r}"${user.role === r ? " checked" : ""}><span>${r}</span></label>`).join("")}</div></div>
         <p class="muted" style="margin-top:1rem">Sekolah: <b style="font-weight:500">${esc(user.school || "-")}</b>. Diatur oleh admin.</p>
-        <label class="field"><span>Kota atau kabupaten</span><input type="text" name="city" value="${esc(user.city)}" placeholder="Misalnya: Banjarbaru"></label>
         <p class="err" id="ob-err" role="alert"></p>
         <button class="btn primary block">Lanjut</button>
       </form>
@@ -43,7 +42,7 @@ export function onboarding({ user }) {
       const f = $("#ob-form", root); let data = {};
       f.addEventListener("submit", (e) => {
         e.preventDefault();
-        data = { name: f.name.value.trim(), role: f.role.value, city: f.city.value.trim() };
+        data = { name: f.name.value.trim(), role: f.role.value };
         if (!data.name) { $("#ob-err", root).textContent = "Isi nama lengkap Anda."; f.name.focus(); return; }
         if (!data.role) { $("#ob-err", root).textContent = "Pilih peran Anda di sekolah."; return; }
         $("#ob1", root).classList.add("hide"); $("#ob2", root).classList.remove("hide"); scrollTo(0, 0);
@@ -304,62 +303,18 @@ export function changePassword({ user }) {
 }
 
 /* ---------------- Akun ---------------- */
-async function fileToLetterhead(file) {
-  const url = URL.createObjectURL(file);
-  const img = new Image();
-  await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error("Gambar tidak bisa dibaca.")); img.src = url; });
-  const scale = Math.min(1, 1400 / img.width);
-  const c = document.createElement("canvas"); c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
-  const ctx = c.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height); ctx.drawImage(img, 0, 0, c.width, c.height);
-  URL.revokeObjectURL(url);
-  return c.toDataURL("image/jpeg", 0.85);
-}
-
 const KIND = { admin: "Admin", guru: "Guru", siswa: "Siswa" };
 
 export function account({ user }) {
-  const staff = user.kind !== "siswa";
-  const html = `${header(user, "akun")}<main class="page"><div class="narrow" style="max-width:600px">
-    <h1 class="page-title">Akun</h1>
-    <p class="page-sub">${esc(user.name || user.username)}</p>
-    <div class="card" style="margin-top:1.2rem"><div class="stack">
-      <div><span class="muted small">Nama akun</span><br><b style="font-weight:500">${esc(user.username)}</b></div>
-      <div><span class="muted small">Jenis akun</span><br>${KIND[user.kind]}${user.isSuper ? " pusat (semua sekolah)" : ""}</div>
-      ${user.school ? `<div><span class="muted small">Sekolah</span><br>${esc(user.school)}</div>` : ""}
-    </div></div>
-    ${staff ? `<h2 class="sec-h">Profil</h2>
-    <form id="ac" novalidate>
-      <label class="field"><span>Nama lengkap</span><input type="text" name="name" value="${esc(user.name)}"></label>
-      <div class="field"><span class="flabel">Peran di sekolah</span><div class="chips">${ROLES.map((r) => `<label><input type="radio" name="role" value="${r}"${user.role === r ? " checked" : ""}><span>${r}</span></label>`).join("")}</div></div>
-      <label class="field"><span>Kota atau kabupaten</span><input type="text" name="city" value="${esc(user.city)}"></label>
-      <button class="btn primary" style="margin-top:1.2rem">Simpan perubahan</button>
-    </form>
-    ${user.school ? `<h2 class="sec-h">Kop surat sekolah</h2>
-    <p class="muted">Kop tampil di bagian atas laporan yang dicetak. Unggah gambar PNG atau JPG yang memanjang ke samping, misalnya tangkapan layar kop dari template Word sekolah.</p>
-    <div class="card" style="margin-top:.8rem" id="ac-lh">${user.letterhead ? `<img src="${user.letterhead}" alt="Kop surat sekolah">` : `<p class="muted">Belum ada kop surat.</p>`}</div>
-    <div class="rowflex" style="margin-top:.7rem"><label class="btn sm">Unggah kop surat<input type="file" id="ac-file" accept="image/png,image/jpeg" hidden></label>${user.letterhead ? `<button class="btn sm danger" id="ac-lh-del">Hapus kop</button>` : ""}</div>` : ""}` : ""}
+  const html = `${header(user, "akun")}<main class="page"><div class="narrow" style="max-width:460px">
+    <h1 class="page-title">Pengaturan akun</h1>
+    <p class="page-sub">${esc(user.name || user.username)}. Nama akun ${esc(user.username)}.</p>
     <h2 class="sec-h">Ganti kata sandi</h2>
     ${pwForm("pw", "Ganti kata sandi")}
-    <h2 class="sec-h">Sesi masuk</h2>
-    <button class="btn" id="ac-out">Keluar</button>
   </div></main>`;
   return {
-    title: "Akun", html,
-    mount(root, ctx) {
-      const f = $("#ac", root);
-      f?.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        if (!f.name.value.trim()) { toast("Isi nama lengkap Anda"); return; }
-        try { await store.updateProfile({ name: f.name.value.trim(), role: f.role.value, city: f.city.value.trim() }); toast("Perubahan disimpan"); ctx.reload(); } catch (ex) { toast(ex.message); }
-      });
-      $("#ac-file", root)?.addEventListener("change", async (e) => {
-        const file = e.target.files[0]; if (!file) return;
-        try { await store.updateProfile({ letterhead: await fileToLetterhead(file) }); toast("Kop surat disimpan"); ctx.reload(); } catch (ex) { toast(ex.message); }
-      });
-      $("#ac-lh-del", root)?.addEventListener("click", async () => { await store.updateProfile({ letterhead: "" }); toast("Kop surat dihapus"); ctx.reload(); });
-      bindPwForm($("#pw", root), () => {});
-      $("#ac-out", root).addEventListener("click", async () => { await store.signOut(); toast("Anda sudah keluar"); go("/"); });
-    },
+    title: "Pengaturan akun", html,
+    mount(root) { bindPwForm($("#pw", root), () => {}); },
   };
 }
 

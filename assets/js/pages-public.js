@@ -5,13 +5,16 @@ import { analyze, mountSociogram, describe } from "./sociogram.js";
 
 export function header(user, active = "") {
   const on = (k) => (k === active ? ' class="on"' : "");
-  const nav = !user
+  const links = !user
     ? `<a href="#/blog"${on("blog")}>Blog</a><a class="pill" href="#/masuk">Masuk</a>`
     : user.kind === "siswa"
-      ? `<a href="#/siswa"${on("dasbor")}>Angket</a><a href="#/akun"${on("akun")}>Akun</a>`
+      ? `<a href="#/siswa"${on("dasbor")}>Angket</a>`
       : user.isSuper
-        ? `<a href="#/admin"${on("admin")}>Admin</a><a href="#/kelas"${on("kelas")}>Kelas</a><a href="#/akun"${on("akun")}>Akun</a>`
-        : `<a href="#/dasbor"${on("dasbor")}>Dasbor</a><a href="#/kelas"${on("kelas")}>Kelas</a><a href="#/akun"${on("akun")}>Akun</a>${user.isAdmin ? `<a href="#/admin"${on("admin")}>Admin</a>` : ""}`;
+        ? `<a href="#/admin"${on("admin")}>Admin</a><a href="#/kelas"${on("kelas")}>Kelas</a>`
+        : `<a href="#/dasbor"${on("dasbor")}>Dasbor</a><a href="#/kelas"${on("kelas")}>Kelas</a>${user.isAdmin ? `<a href="#/admin"${on("admin")}>Admin</a>` : ""}`;
+  const menu = user ? `<details class="usermenu"><summary aria-label="Menu akun"><span class="avatar" aria-hidden="true">${esc((user.name || user.username || "?").trim().charAt(0).toUpperCase())}</span><span class="who"><b>${esc(user.name || user.username)}</b><span>${esc(user.username)}</span></span><span class="caret" aria-hidden="true">▾</span></summary>
+      <div class="menu" role="menu"><a role="menuitem" href="#/akun"${on("akun")}>Pengaturan akun</a><button type="button" role="menuitem" data-logout>Keluar</button></div></details>` : "";
+  const nav = links + menu;
   return `<header class="site-header wrap">
     <a class="lockup" href="#/" aria-label="Examus by prepod, beranda"><img src="assets/img/logo.svg" alt="" width="40" height="40"><span class="words"><span class="name">Examus</span><span class="by">by prepod</span></span></a>
     <nav aria-label="Utama">${nav}</nav>
@@ -168,7 +171,7 @@ const LEGAL = {
     <h2>Tanggung jawab</h2><p>Admin bertanggung jawab atas keakuratan daftar kelas yang dimasukkan, dan guru atas cara hasil asesmen digunakan di sekolah.</p>` },
   privasi: { title: "Kebijakan privasi", body: `
     <p>Halaman ini menjelaskan data apa yang disimpan Examus dan untuk apa.</p>
-    <h2>Data yang disimpan</h2><ul><li>Akun guru, admin, dan murid: nama akun, nama, dan sekolah. Guru juga bisa mengisi peran dan kota.</li><li>Kata sandi: sampai pengguna menggantinya, kata sandi awal dari admin bisa dilihat admin sekolah supaya bisa dibagikan atau diatur ulang. Setelah diganti, hanya tersisa bentuk terenkripsi yang tidak bisa dibaca siapa pun.</li><li>Daftar kelas: nama murid dan jenis kelamin (L/P).</li><li>Jawaban murid atas angket yang Anda jalankan.</li></ul>
+    <h2>Data yang disimpan</h2><ul><li>Akun guru, admin, dan murid: nama akun, nama, dan sekolah. Guru juga bisa mengisi perannya di sekolah.</li><li>Kata sandi: sampai pengguna menggantinya, kata sandi awal dari admin bisa dilihat admin sekolah supaya bisa dibagikan atau diatur ulang. Setelah diganti, hanya tersisa bentuk terenkripsi yang tidak bisa dibaca siapa pun.</li><li>Daftar kelas: nama murid dan jenis kelamin (L/P).</li><li>Jawaban murid atas angket yang Anda jalankan.</li></ul>
     <p>Examus tidak meminta tanggal lahir, alamat, nomor telepon, atau foto murid.</p>
     <h2>Pemakaian data</h2><ul><li>Data murid hanya dipakai untuk menyusun laporan bagi guru yang membuat sesi.</li><li>Data tidak dijual dan tidak dipakai untuk iklan.</li><li>Guru dapat menghapus sesi miliknya dan admin dapat menghapus daftar kelas kapan saja; jawaban di dalam sesi ikut terhapus bersama sesinya.</li></ul>
     <h2>Penyimpanan</h2><p>Data tersimpan di database dan dipisahkan per sekolah: akun sebuah sekolah tidak dapat membaca data sekolah lain. Daftar kelas hanya dapat dibaca guru yang ditugaskan dan admin sekolah yang bersangkutan. Sesi dan jawaban hanya dapat dibaca guru pembuatnya dan admin sekolah tersebut.</p>` },

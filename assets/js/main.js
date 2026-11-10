@@ -77,10 +77,15 @@ async function render() {
 }
 
 // Tombol yang menggulir ke bagian halaman (hash dipakai untuk rute, jadi tidak bisa memakai #anchor).
-document.addEventListener("click", (e) => {
+document.addEventListener("click", async (e) => {
+  // Menu akun: Keluar, dan tutup menu bila klik di luarnya.
+  const menu = document.querySelector(".usermenu[open]");
+  if (e.target.closest("[data-logout]")) { await store.signOut(); go("/masuk"); return; }
+  if (menu && !menu.contains(e.target)) menu.removeAttribute("open");
   const b = e.target.closest("[data-scroll]");
   if (b) document.getElementById(b.dataset.scroll)?.scrollIntoView({ behavior: "smooth" });
 });
 
 window.addEventListener("hashchange", render);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") document.querySelector(".usermenu[open]")?.removeAttribute("open"); });
 render();

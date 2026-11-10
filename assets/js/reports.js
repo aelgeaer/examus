@@ -178,13 +178,13 @@ export async function report({ user, params }) {
   const today = fmtDate(Date.now()).replace(/^\S+,\s*/, "");
   const html = `${header(user, "dasbor")}<main class="page"><div class="wrap">
     <a class="back no-print" href="#/sesi/${s.id}">← ${esc(s.className)}</a>
-    <div class="print-head">${user.letterhead ? `<img src="${user.letterhead}" alt="Kop surat">` : user.school ? `<p style="font-weight:600;font-size:14pt">${esc(user.school)}</p>` : ""}</div>
+    <div class="print-head">${user.school ? `<p style="font-weight:600;font-size:14pt">${esc(user.school)}</p>` : ""}</div>
     <h1 class="page-title">Laporan ${esc(a.name.toLowerCase())}</h1>
     <p class="page-sub">${esc(s.className)}. ${res.length} dari ${s.roster.length} murid mengisi. Disusun ${today}.</p>
     <p class="muted small" style="margin-top:.4rem">Rahasia. Hanya untuk guru yang berwenang.</p>
     <div class="rowflex no-print" style="margin-top:1.2rem"><button class="btn primary sm" id="rp-print">Cetak atau simpan PDF</button><button class="btn sm" id="rp-csv">Unduh CSV untuk Excel</button></div>
     ${r.body}
-    <div class="print-sign"><p>${esc(user.city || "")}${user.city ? ", " : ""}${today}</p><p>${esc(user.role || "")}</p><p class="line">${esc(user.name || "")}</p></div>
+    <div class="print-sign"><p>${today}</p><p>${esc(user.role || "")}</p><p class="line">${esc(user.name || "")}</p></div>
   </div></main>`;
   return {
     title: `Laporan ${a.name}, ${s.className}`, html,

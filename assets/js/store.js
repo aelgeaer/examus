@@ -26,8 +26,8 @@ async function makeSupabase() {
   // role = peran di sekolah (Guru BK dst.), kind = jenis akun (admin / guru / siswa).
   const prof = (p) => p && {
     id: p.id, username: p.username, kind: p.kind, isAdmin: p.kind === "admin", isSuper: p.kind === "admin" && !p.school_id,
-    name: p.name || "", role: p.title || "", city: p.city || "", school: p.schools?.name || "", schoolId: p.school_id || null,
-    letterhead: p.letterhead || "", onboarded: !!p.onboarded, mustChange: !!p.must_change, classId: p.class_id || null, memberNo: p.member_no ?? null,
+    name: p.name || "", role: p.title || "", school: p.schools?.name || "", schoolId: p.school_id || null,
+    onboarded: !!p.onboarded, mustChange: !!p.must_change, classId: p.class_id || null, memberNo: p.member_no ?? null,
   };
   const sess = (s) => s && { id: s.id, classId: s.class_id, className: s.class_name, type: s.type, config: s.config, roster: s.roster, closesAt: s.closes_at, closed: s.closed, createdAt: s.created_at, filledCount: s.responses?.[0]?.count ?? 0 };
   const cls = (c) => c && { id: c.id, name: c.name, members: c.members, schoolId: c.school_id, createdAt: c.created_at };
@@ -47,7 +47,7 @@ async function makeSupabase() {
     async signOut() { await sb.auth.signOut(); },
     async changePassword(oldPw, newPw) { must(await sb.rpc("change_my_password", { p_old: oldPw, p_new: newPw })); },
     async updateProfile(patch) {
-      const map = { name: "name", role: "title", city: "city", onboarded: "onboarded", letterhead: "letterhead" };
+      const map = { name: "name", role: "title", onboarded: "onboarded" };
       const row = {};
       for (const [k, col] of Object.entries(map)) if (k in patch) row[col] = patch[k];
       return prof(must(await sb.from("profiles").update(row).eq("id", await userId()).select(PROFILE).single()));
