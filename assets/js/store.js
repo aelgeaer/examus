@@ -61,8 +61,8 @@ async function makeSupabase() {
 
     async listSessions() { return must(await sb.from("sessions").select("*, responses(count)").eq("owner", await userId()).order("created_at", { ascending: false })).map(sess); },
     async getSession(id) { return sess(must(await sb.from("sessions").select("*, responses(count)").eq("id", id).maybeSingle())); },
-    async createSession({ classId, type, config, days }) {
-      return sess(must(await sb.rpc("create_session", { p_class: classId, p_type: type, p_config: config, p_days: days })));
+    async createSession({ classId, type, config, days, until }) {
+      return sess(must(await sb.rpc("create_session", { p_class: classId, p_type: type, p_config: config, p_days: days || 14, p_until: until || null })));
     },
     async setClosed(id, closed) {
       const row = { closed };

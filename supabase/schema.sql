@@ -464,7 +464,8 @@ drop function if exists public.owner_add_responses(uuid, jsonb);   -- diganti cr
 /* ------------------------------------------------------------------ */
 -- Nama kelas dan daftar murid diambil dari database, bukan dari kiriman aplikasi,
 -- dan hanya untuk kelas yang boleh diakses pemanggil.
-create or replace function public.create_session(p_class uuid, p_type text, p_config jsonb, p_days int) returns json
+drop function if exists public.create_session(uuid, text, jsonb, int);
+create or replace function public.create_session(p_class uuid, p_type text, p_config jsonb, p_days int, p_until timestamptz default null) returns json
 language plpgsql security definer set search_path = public as $$
 declare p public.profiles; c public.classes; s public.sessions;
 begin
@@ -473,10 +474,12 @@ begin
   if p.school_id is null then raise exception 'Admin pusat tidak membuat sesi. Pakai akun admin sekolah atau guru.'; end if;
   if not public.has_class_access(p_class) then raise exception 'Kelas tidak ditemukan atau belum ditugaskan kepada Anda.'; end if;
   if coalesce(length(p_type), 0) not between 1 and 40 then raise exception 'Jenis asesmen tidak dikenal.'; end if;
-  if p_days is null or p_days < 1 or p_days > 90 then raise exception 'Batas pengisian 1 sampai 90 hari.'; end if;
+  if p_until is not null then
+    if p_until <= now() or p_until > now() + interval '90 days' then raise exception 'Tanggal batas harus di masa depan dan paling lama 90 hari dari sekarang.'; end if;
+  elsif p_days is null or p_days < 1 or p_days > 90 then raise exception 'Batas pengisian 1 sampai 90 hari.'; end if;
   select * into c from public.classes where id = p_class;
   insert into public.sessions (school_id, owner, class_id, class_name, type, config, roster, closes_at)
-  values (c.school_id, auth.uid(), c.id, c.name, p_type, coalesce(p_config, '{}'), c.members, now() + make_interval(days => p_days))
+  values (c.school_id, auth.uid(), c.id, c.name, p_type, coalesce(p_config, '{}'), c.members, coalesce(p_until, now() + make_interval(days => p_days)))
   returning * into s;
   return to_json(s);
 end $$;
@@ -557,7 +560,7 @@ grant execute on function
   public.admin_create_students(uuid), public.admin_users(), public.admin_set_password(uuid, text),
   public.admin_delete_user(uuid), public.admin_overview(),
   public.admin_save_class(uuid, uuid, text, jsonb, uuid[]), public.admin_delete_class(uuid),
-  public.create_session(uuid, text, jsonb, int), public.create_sample(text, jsonb, text, jsonb, jsonb),
+  public.create_session(uuid, text, jsonb, int, timestamptz), public.create_sample(text, jsonb, text, jsonb, jsonb),
   public.change_my_password(text, text),
   public.student_sessions(), public.student_session(uuid), public.submit_response(uuid, jsonb)
 to authenticated;

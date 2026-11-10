@@ -188,6 +188,7 @@ export async function classEdit({ user, params }) {
 }
 
 /* ---------------- Mulai sesi ---------------- */
+const ymd = (ms) => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 const DEADLINES = [[1, "1 hari"], [3, "3 hari"], [7, "1 minggu"], [14, "2 minggu"], [30, "30 hari"]];
 export async function start({ user, params, query }) {
   const a = getAssessment(params.type);
@@ -206,7 +207,8 @@ export async function start({ user, params, query }) {
     ${socio ? SOCIO_VARIANTS.map((v, i) => `<label class="opt"><input type="radio" name="variant" value="${v.id}"${i === 0 ? " checked" : ""}><span class="t">${v.name}</span><span class="d">${v.desc}</span><ol>${v.questions.map((q) => `<li>${esc(q.text)}</li>`).join("")}</ol></label>`).join("")
       : `<div class="card"><p>${itemCount(a.id, {})} butir, satu butir per layar. Murid cukup mengetuk jawaban yang paling sesuai, kira-kira 5 menit, lewat akun masing-masing.</p></div>`}
     <h2 class="sec-h">Batas pengisian</h2>
-    <div class="seg" role="radiogroup" aria-label="Batas pengisian">${DEADLINES.map(([d, t]) => `<label><input type="radio" name="days" value="${d}"${d === 14 ? " checked" : ""}><span>${t}</span></label>`).join("")}</div>
+    <div class="seg" role="radiogroup" aria-label="Batas pengisian">${DEADLINES.map(([d, t]) => `<label><input type="radio" name="days" value="${d}"${d === 14 ? " checked" : ""}><span>${t}</span></label>`).join("")}<label><input type="radio" name="days" value="custom"><span>Pilih tanggal</span></label></div>
+    <label class="field hide" id="st-custom" style="margin-top:.8rem;max-width:260px"><span>Ditutup pada tanggal</span><input type="date" id="st-date" min="${ymd(Date.now() + 86400000)}" max="${ymd(Date.now() + 90 * 86400000)}"><span class="hint">Ditutup pukul 23.59 pada tanggal itu. Maksimal 90 hari dari sekarang.</span></label>
     <p class="muted small" id="st-until" style="margin-top:.6rem"></p>
     <p class="err" id="st-err" role="alert"></p>
     <button class="btn primary block" id="st-go"${list.length ? "" : " disabled"}>Mulai sesi</button>
@@ -214,14 +216,29 @@ export async function start({ user, params, query }) {
   return {
     title: "Mulai " + a.name, html,
     mount(root) {
-      const until = () => { const d = Number($('input[name="days"]:checked', root).value); $("#st-until", root).textContent = `Pengisian ditutup otomatis ${fmtDate(Date.now() + d * 86400000, true)}. Anda bisa menutupnya lebih awal.`; };
+      const deadline = () => {
+        const v = $('input[name="days"]:checked', root).value;
+        if (v !== "custom") return { days: Number(v), at: Date.now() + Number(v) * 86400000 };
+        const d = $("#st-date", root).value;
+        return d ? { until: new Date(d + "T23:59:00").toISOString(), at: new Date(d + "T23:59:00").getTime() } : null;
+      };
+      const until = () => {
+        $("#st-custom", root).classList.toggle("hide", $('input[name="days"]:checked', root).value !== "custom");
+        const dl = deadline();
+        $("#st-until", root).textContent = dl ? `Pengisian ditutup otomatis ${fmtDate(dl.at, true)}. Anda bisa menutupnya lebih awal.` : "Pilih tanggal penutupan.";
+      };
+      $("#st-date", root).addEventListener("input", until);
       $$('input[name="days"]', root).forEach((r) => r.addEventListener("change", until)); until();
       $("#st-go", root).addEventListener("click", async (e) => {
         const classId = $('input[name="kelas"]:checked', root)?.value;
         if (!classId) { $("#st-err", root).textContent = "Pilih kelas lebih dulu."; return; }
         const config = socio ? (() => { const v = SOCIO_VARIANTS.find((x) => x.id === $('input[name="variant"]:checked', root).value); return { variant: v.id, maxPick: 3, questions: v.questions }; })() : {};
+        const dl = deadline();
+        if (!dl) { $("#st-err", root).textContent = "Pilih tanggal penutupan."; return; }
+        if (dl.at <= Date.now()) { $("#st-err", root).textContent = "Tanggal penutupan harus di masa depan."; return; }
+        $("#st-err", root).textContent = "";
         e.currentTarget.disabled = true;
-        try { const s = await store.createSession({ classId, type: a.id, config, days: Number($('input[name="days"]:checked', root).value) }); toast("Sesi dibuat"); go(`/sesi/${s.id}`); }
+        try { const s = await store.createSession({ classId, type: a.id, config, days: dl.days, until: dl.until }); toast("Sesi dibuat"); go(`/sesi/${s.id}`); }
         catch (ex) { $("#st-err", root).textContent = ex.message; e.currentTarget.disabled = false; }
       });
     },

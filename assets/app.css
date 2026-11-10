@@ -179,7 +179,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* Forms */
 .field { display: block; margin-top: 1.1rem; }
 .field > span, .field > label, .flabel { display: block; font-weight: 500; margin-bottom: .4rem; }
-.field input[type=text], .field input[type=email], .field input[type=password], .field textarea, .field select {
+.field input[type=text], .field input[type=email], .field input[type=password], .field input[type=date], .field textarea, .field select {
   width: 100%; border: 1.5px solid transparent; background: #fff; border-radius: 14px; padding: .8rem 1rem; min-height: 48px;
 }
 .field textarea { min-height: 180px; resize: vertical; line-height: 1.5; }
