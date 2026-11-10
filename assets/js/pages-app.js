@@ -1,10 +1,8 @@
-import { esc, $, $$, toast, go, fmtDate, fmtShort, parseRoster, studentLink } from "./util.js";
+import { esc, $, $$, toast, go, fmtDate, fmtShort, parseRoster, homePath, genPassword, suggestUsername, download, toCSV } from "./util.js";
 import { store, isOpen } from "./store.js";
 import { ASSESSMENTS, ICONS, getAssessment, SOCIO_VARIANTS, GAYA_ITEMS, MINAT_ITEMS, KEBUTUHAN_ITEMS } from "./data.js";
 import { header } from "./pages-public.js";
 
-const localNotice = () => store.mode === "lokal"
-  ? `<p class="notice no-print">Mode percobaan: data tersimpan di browser ini saja, dan link murid hanya bisa dibuka di perangkat ini. Agar murid bisa mengisi dari HP masing-masing, hubungkan database (panduan ada di README).</p>` : "";
 const ROLES = ["Guru BK", "Psikolog sekolah", "Wali kelas", "Guru mata pelajaran", "Kepala sekolah", "Lainnya"];
 const itemCount = (type, config) => type === "sosiometri" ? (config.questions || []).length : { "gaya-belajar": GAYA_ITEMS.length, "minat-karier": MINAT_ITEMS.length, kebutuhan: KEBUTUHAN_ITEMS.length }[type];
 
@@ -18,7 +16,7 @@ export function onboarding({ user }) {
       <form id="ob-form" novalidate>
         <label class="field"><span>Nama lengkap</span><input type="text" name="name" value="${esc(user.name)}" autocomplete="name"><span class="hint">Boleh dengan gelar. Dipakai untuk sapaan dan tanda tangan laporan.</span></label>
         <div class="field"><span class="flabel" id="role-l">Peran di sekolah</span><div class="chips" role="radiogroup" aria-labelledby="role-l">${ROLES.map((r) => `<label><input type="radio" name="role" value="${r}"${user.role === r ? " checked" : ""}><span>${r}</span></label>`).join("")}</div></div>
-        <label class="field"><span>Nama sekolah</span><input type="text" name="school" value="${esc(user.school)}" placeholder="Misalnya: SMP Negeri 3 Banjarbaru"></label>
+        <p class="muted" style="margin-top:1rem">Sekolah: <b style="font-weight:500">${esc(user.school || "-")}</b>. Diatur oleh admin.</p>
         <label class="field"><span>Kota atau kabupaten</span><input type="text" name="city" value="${esc(user.city)}" placeholder="Misalnya: Banjarbaru"></label>
         <p class="err" id="ob-err" role="alert"></p>
         <button class="btn primary block">Lanjut</button>
@@ -32,7 +30,7 @@ export function onboarding({ user }) {
         <p><b style="font-weight:500">Data murid milik sekolah.</b> Examus hanya menyimpan dan mengolahnya untuk membuat laporan Anda. Tidak dijual dan tidak dipakai untuk iklan.</p>
         <p><b style="font-weight:500">Murid dan orang tua perlu tahu.</b> Jalankan asesmen dengan izin sekolah dan jelaskan tujuannya kepada murid serta orang tua.</p>
         <p><b style="font-weight:500">Hasil untuk dipahami, bukan untuk melabeli.</b> Laporan bukan diagnosis, bukan dasar hukuman, dan tidak menentukan nilai murid.</p>
-        <p><b style="font-weight:500">Hasil bersifat rahasia.</b> Sosiogram dan laporan perorangan hanya untuk guru yang berwenang. Link pengisian hanya untuk kelas yang bersangkutan.</p>
+        <p><b style="font-weight:500">Hasil bersifat rahasia.</b> Sosiogram dan laporan perorangan hanya untuk guru yang berwenang. Akun murid hanya melihat angket kelasnya sendiri.</p>
       </div>
       <label class="check" style="margin-top:1rem"><input type="checkbox" id="ob-agree"><span>Saya sudah membaca dan menyetujui <a href="#/syarat">Syarat penggunaan</a> serta <a href="#/privasi">Kebijakan privasi</a>.</span></label>
       <button class="btn primary block" id="ob-done" disabled style="margin-top:1rem">Setuju dan mulai</button>
@@ -45,7 +43,7 @@ export function onboarding({ user }) {
       const f = $("#ob-form", root); let data = {};
       f.addEventListener("submit", (e) => {
         e.preventDefault();
-        data = { name: f.name.value.trim(), role: f.role.value, school: f.school.value.trim(), city: f.city.value.trim() };
+        data = { name: f.name.value.trim(), role: f.role.value, city: f.city.value.trim() };
         if (!data.name) { $("#ob-err", root).textContent = "Isi nama lengkap Anda."; f.name.focus(); return; }
         if (!data.role) { $("#ob-err", root).textContent = "Pilih peran Anda di sekolah."; return; }
         $("#ob1", root).classList.add("hide"); $("#ob2", root).classList.remove("hide"); scrollTo(0, 0);
@@ -69,7 +67,6 @@ export async function dashboard({ user }) {
   const sessions = await store.listSessions();
   const html = `${header(user, "dasbor")}<main class="page"><div class="narrow" style="max-width:800px">
     <h1 class="page-title">Halo, ${esc(user.name || "Bapak/Ibu")}</h1>
-    <div style="margin-top:1.2rem">${localNotice()}</div>
     <h2 class="sec-h">Mulai asesmen</h2>
     <div class="astart">${ASSESSMENTS.map((a) => a.ready
       ? `<a href="#/mulai/${a.id}">${ICONS[a.id]}<span><b>${esc(a.name)}</b><small>${esc(a.short)}</small></span><span class="go" aria-hidden="true">›</span></a>`
@@ -95,6 +92,9 @@ export async function dashboard({ user }) {
 }
 
 /* ---------------- Daftar kelas ---------------- */
+// Murid yang sudah ada mempertahankan nomornya (akun murid menautkan ke nomor ini); yang baru mendapat nomor berikutnya.
+const numbered = (list) => { let max = Math.max(0, ...list.map((m) => m.no || 0)); return list.map((m) => ({ ...m, no: m.no || ++max })); };
+
 export async function classes({ user }) {
   const list = await store.listClasses();
   return {
@@ -111,7 +111,7 @@ export async function classes({ user }) {
 export async function classEdit({ user, params, query }) {
   const existing = params.id === "baru" ? null : await store.getClass(params.id);
   if (params.id !== "baru" && !existing) return { html: `${header(user, "kelas")}<main class="page"><div class="narrow"><h1 class="page-title">Kelas tidak ditemukan</h1><p style="margin-top:1rem"><a class="btn" href="#/kelas">Ke daftar kelas</a></p></div></main>` };
-  let members = existing ? existing.members.map((m) => ({ name: m.name, g: m.g || "" })) : [];
+  let members = existing ? existing.members.map((m) => ({ no: m.no, name: m.name, g: m.g || "" })) : [];
   const next = query.get("lanjut");
   const html = `${header(user, "kelas")}<main class="page"><div class="narrow">
     <a class="back" href="#/kelas">← Semua kelas</a>
@@ -134,7 +134,7 @@ export async function classEdit({ user, params, query }) {
     mount(root) {
       const box = $("#c-members", root);
       const draw = () => {
-        box.innerHTML = members.map((m, i) => `<div class="member" data-i="${i}"><span class="no">${i + 1}</span><input type="text" value="${esc(m.name)}" aria-label="Nama murid ${i + 1}"><span class="lp" role="group" aria-label="Jenis kelamin"><button type="button" data-g="L" aria-pressed="${m.g === "L"}">L</button><button type="button" data-g="P" aria-pressed="${m.g === "P"}">P</button></span><button type="button" class="x" aria-label="Hapus ${esc(m.name)}">×</button></div>`).join("") || `<p class="muted">Belum ada nama. Tempel daftar di atas atau tambah satu per satu.</p>`;
+        box.innerHTML = members.map((m, i) => `<div class="member" data-i="${i}"><span class="no">${m.no ?? "•"}</span><input type="text" value="${esc(m.name)}" aria-label="Nama murid ${i + 1}"><span class="lp" role="group" aria-label="Jenis kelamin"><button type="button" data-g="L" aria-pressed="${m.g === "L"}">L</button><button type="button" data-g="P" aria-pressed="${m.g === "P"}">P</button></span><button type="button" class="x" aria-label="Hapus ${esc(m.name)}">×</button></div>`).join("") || `<p class="muted">Belum ada nama. Tempel daftar di atas atau tambah satu per satu.</p>`;
         $("#c-count", root).textContent = members.length || "";
         const missing = members.filter((m) => !m.g).length;
         $("#c-warn", root).textContent = missing ? `${missing} nama belum diberi L/P.` : "";
@@ -153,11 +153,11 @@ export async function classEdit({ user, params, query }) {
       $("#c-add", root).addEventListener("click", () => { members.push({ name: "", g: "" }); draw(); $$(".member input", box).pop()?.focus(); });
       $("#c-save", root).addEventListener("click", async () => {
         const name = $("#c-name", root).value.trim(), err = $("#c-err", root);
-        const clean = members.map((m) => ({ name: m.name.trim(), g: m.g })).filter((m) => m.name);
+        const clean = members.map((m) => ({ no: m.no, name: m.name.trim(), g: m.g })).filter((m) => m.name);
         if (!name) { err.textContent = "Isi nama kelas."; $("#c-name", root).focus(); return; }
         if (clean.length < 3) { err.textContent = "Daftar kelas perlu minimal 3 murid."; return; }
         try {
-          const c = await store.saveClass({ id: existing?.id, name, members: clean.map((m, i) => ({ no: i + 1, ...m })) });
+          const c = await store.saveClass({ id: existing?.id, name, members: numbered(clean) });
           toast("Daftar kelas disimpan"); go(next ? `/${next}?kelas=${c.id}` : "/kelas");
         } catch (ex) { err.textContent = ex.message; }
       });
@@ -187,17 +187,17 @@ export async function start({ user, params, query }) {
       : `<div class="card"><p>Belum ada daftar kelas. Buat dulu daftar nama muridnya; cukup tempel dari Excel atau WhatsApp.</p></div><p style="margin-top:.7rem"><a class="btn primary" href="#/kelas/baru?lanjut=mulai/${a.id}">Buat daftar kelas</a></p>`}
     <h2 class="sec-h">${socio ? "Pertanyaan apa yang diajukan?" : "Isi angket"}</h2>
     ${socio ? SOCIO_VARIANTS.map((v, i) => `<label class="opt"><input type="radio" name="variant" value="${v.id}"${i === 0 ? " checked" : ""}><span class="t">${v.name}</span><span class="d">${v.desc}</span><ol>${v.questions.map((q) => `<li>${esc(q.text)}</li>`).join("")}</ol></label>`).join("")
-      : `<div class="card"><p>${itemCount(a.id, {})} butir, satu butir per layar. Murid cukup mengetuk jawaban yang paling sesuai, kira-kira 5 menit.</p></div>`}
+      : `<div class="card"><p>${itemCount(a.id, {})} butir, satu butir per layar. Murid cukup mengetuk jawaban yang paling sesuai, kira-kira 5 menit, lewat akun masing-masing.</p></div>`}
     <h2 class="sec-h">Batas pengisian</h2>
     <div class="seg" role="radiogroup" aria-label="Batas pengisian">${DEADLINES.map(([d, t]) => `<label><input type="radio" name="days" value="${d}"${d === 14 ? " checked" : ""}><span>${t}</span></label>`).join("")}</div>
     <p class="muted small" id="st-until" style="margin-top:.6rem"></p>
     <p class="err" id="st-err" role="alert"></p>
-    <button class="btn primary block" id="st-go"${list.length ? "" : " disabled"}>Mulai dan buat link</button>
+    <button class="btn primary block" id="st-go"${list.length ? "" : " disabled"}>Mulai sesi</button>
   </div></main>`;
   return {
     title: "Mulai " + a.name, html,
     mount(root) {
-      const until = () => { const d = Number($('input[name="days"]:checked', root).value); $("#st-until", root).textContent = `Link ditutup otomatis ${fmtDate(Date.now() + d * 86400000, true)}. Anda bisa menutupnya lebih awal.`; };
+      const until = () => { const d = Number($('input[name="days"]:checked', root).value); $("#st-until", root).textContent = `Pengisian ditutup otomatis ${fmtDate(Date.now() + d * 86400000, true)}. Anda bisa menutupnya lebih awal.`; };
       $$('input[name="days"]', root).forEach((r) => r.addEventListener("change", until)); until();
       $("#st-go", root).addEventListener("click", async (e) => {
         const classId = $('input[name="kelas"]:checked', root)?.value;
@@ -211,7 +211,7 @@ export async function start({ user, params, query }) {
   };
 }
 
-/* ---------------- Halaman sesi: bagikan dan pantau ---------------- */
+/* ---------------- Halaman sesi: pantau jawaban ---------------- */
 export async function session({ user, params }) {
   const s = await store.getSession(params.id);
   if (!s) return { html: `${header(user, "dasbor")}<main class="page"><div class="narrow"><h1 class="page-title">Sesi tidak ditemukan</h1><p style="margin-top:1rem"><a class="btn" href="#/dasbor">Ke dasbor</a></p></div></main>` };
@@ -219,20 +219,12 @@ export async function session({ user, params }) {
   const res = await store.listResponses(s.id);
   const done = new Set(res.map((r) => r.no));
   const waiting = s.roster.filter((m) => !done.has(m.no));
-  const link = studentLink(s.code);
-  const waText = `Halo, mohon isi angket ${a.name.toLowerCase()} untuk ${s.className}. Pilih namamu lalu jawab pertanyaannya, sekitar 5 menit.\n${link}`;
   const html = `${header(user, "dasbor")}<main class="page"><div class="narrow">
     <a class="back" href="#/dasbor">← Dasbor</a>
     <h1 class="page-title">${esc(s.className)}</h1>
     <p class="page-sub">${esc(a.name)}. ${open ? `Dibuka sampai ${fmtDate(s.closesAt, true)}.` : "Pengisian sudah ditutup."}</p>
-    ${open ? `<div class="sharebox" style="margin-top:1.4rem">
-      <b style="font-weight:500">Bagikan ke murid</b>
-      <div class="url" id="ss-url">${esc(link)}</div>
-      <a class="btn primary block" href="https://wa.me/?text=${encodeURIComponent(waText)}" target="_blank" rel="noopener">Kirim lewat WhatsApp</a>
-      <button class="btn white block" id="ss-share">Bagikan lewat aplikasi lain</button>
-      <button class="btn white block" id="ss-copy">Salin link</button>
-      <a class="btn white block" href="#/s/${s.code}">Buka halaman murid di perangkat ini</a>
-    </div><div style="margin-top:.8rem">${localNotice()}</div>` : ""}
+    ${open ? `<div class="card sky" style="margin-top:1.4rem"><b style="font-weight:500">Murid mengisi lewat akun mereka</b>
+      <p style="margin-top:.4rem">Angket ini muncul otomatis di akun murid ${esc(s.className)} sampai batas waktunya. Murid yang belum punya akun: minta admin sekolah membuatkannya.</p></div>` : ""}
     <h2 class="sec-h">Jawaban</h2>
     <p><span class="big-num">${done.size}</span> <span class="muted">dari ${total} murid sudah mengisi</span></p>
     <div class="progress" style="margin:.7rem 0 1rem" role="progressbar" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${done.size}"><i style="width:${(done.size / total) * 100}%"></i></div>
@@ -245,17 +237,50 @@ export async function session({ user, params }) {
   return {
     title: s.className, html,
     mount(root, ctx) {
-      $("#ss-copy", root)?.addEventListener("click", async () => { try { await navigator.clipboard.writeText(link); toast("Link disalin"); } catch { prompt("Salin link ini:", link); } });
-      $("#ss-share", root)?.addEventListener("click", async () => {
-        if (navigator.share) { try { await navigator.share({ title: `Angket ${s.className}`, text: waText }); } catch { /* dibatalkan */ } }
-        else { try { await navigator.clipboard.writeText(waText); toast("Pesan dan link disalin"); } catch { prompt("Salin link ini:", link); } }
-      });
       $("#ss-refresh", root).addEventListener("click", () => ctx.reload());
       $("#ss-toggle", root).addEventListener("click", async () => { await store.setClosed(s.id, open); toast(open ? "Pengisian ditutup" : "Pengisian dibuka lagi"); ctx.reload(); });
       $("#ss-del", root).addEventListener("click", async () => {
         if (!confirm("Hapus sesi ini beserta semua jawabannya? Tindakan ini tidak bisa dibatalkan.")) return;
         await store.deleteSession(s.id); toast("Sesi dihapus"); go("/dasbor");
       });
+    },
+  };
+}
+
+/* ---------------- Ganti kata sandi ---------------- */
+const pwForm = (id, label) => `<form id="${id}" novalidate>
+  <label class="field"><span>Kata sandi saat ini</span><input type="password" name="old" autocomplete="current-password" required></label>
+  <label class="field"><span>Kata sandi baru</span><input type="password" name="pw" autocomplete="new-password" required><span class="hint">Minimal 6 karakter. Pilih yang hanya Anda yang tahu.</span></label>
+  <label class="field"><span>Ulangi kata sandi baru</span><input type="password" name="pw2" autocomplete="new-password" required></label>
+  <p class="err" role="alert"></p>
+  <button class="btn primary">${label}</button>
+</form>`;
+
+function bindPwForm(form, onDone) {
+  const err = form.querySelector(".err"), btn = form.querySelector("button");
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault(); err.textContent = "";
+    if (form.pw.value.length < 6) { err.textContent = "Kata sandi baru minimal 6 karakter."; return; }
+    if (form.pw.value !== form.pw2.value) { err.textContent = "Pengulangan kata sandi tidak sama."; return; }
+    btn.disabled = true;
+    try { await store.changePassword(form.old.value, form.pw.value); toast("Kata sandi diganti"); form.reset(); onDone(); }
+    catch (ex) { err.textContent = ex.message; }
+    btn.disabled = false;
+  });
+}
+
+export function changePassword({ user }) {
+  return {
+    title: "Ganti kata sandi",
+    html: `${header(user, "akun")}<main class="page"><div class="narrow" style="max-width:460px">
+      <h1 class="page-title">Ganti kata sandi</h1>
+      <p class="page-sub">${user.mustChange ? "Kata sandi dari admin hanya untuk masuk pertama kali. Buat kata sandi baru sebelum melanjutkan." : "Kata sandi baru berlaku mulai sekarang."}</p>
+      ${pwForm("pw", user.mustChange ? "Simpan dan lanjut" : "Ganti kata sandi")}
+      <p style="margin-top:1.2rem"><button class="linkbtn" id="pw-out">Keluar</button></p>
+    </div></main>`,
+    mount(root) {
+      bindPwForm($("#pw", root), () => go(homePath(user)));
+      $("#pw-out", root).addEventListener("click", async () => { await store.signOut(); go("/masuk"); });
     },
   };
 }
@@ -272,63 +297,253 @@ async function fileToLetterhead(file) {
   return c.toDataURL("image/jpeg", 0.85);
 }
 
+const KIND = { admin: "Admin", guru: "Guru", siswa: "Siswa" };
+
 export function account({ user }) {
+  const staff = user.kind !== "siswa";
   const html = `${header(user, "akun")}<main class="page"><div class="narrow" style="max-width:600px">
     <h1 class="page-title">Akun</h1>
-    <p class="page-sub">${esc(user.email)}</p>
+    <p class="page-sub">${esc(user.name || user.username)}</p>
+    <div class="card" style="margin-top:1.2rem"><div class="stack">
+      <div><span class="muted small">Nama akun</span><br><b style="font-weight:500">${esc(user.username)}</b></div>
+      <div><span class="muted small">Jenis akun</span><br>${KIND[user.kind]}${user.isSuper ? " pusat (semua sekolah)" : ""}</div>
+      ${user.school ? `<div><span class="muted small">Sekolah</span><br>${esc(user.school)}</div>` : ""}
+    </div></div>
+    ${staff ? `<h2 class="sec-h">Profil</h2>
     <form id="ac" novalidate>
       <label class="field"><span>Nama lengkap</span><input type="text" name="name" value="${esc(user.name)}"></label>
       <div class="field"><span class="flabel">Peran di sekolah</span><div class="chips">${ROLES.map((r) => `<label><input type="radio" name="role" value="${r}"${user.role === r ? " checked" : ""}><span>${r}</span></label>`).join("")}</div></div>
-      <label class="field"><span>Nama sekolah</span><input type="text" name="school" value="${esc(user.school)}"></label>
       <label class="field"><span>Kota atau kabupaten</span><input type="text" name="city" value="${esc(user.city)}"></label>
       <button class="btn primary" style="margin-top:1.2rem">Simpan perubahan</button>
     </form>
-    <h2 class="sec-h">Kop surat sekolah</h2>
+    ${user.school ? `<h2 class="sec-h">Kop surat sekolah</h2>
     <p class="muted">Kop tampil di bagian atas laporan yang dicetak. Unggah gambar PNG atau JPG yang memanjang ke samping, misalnya tangkapan layar kop dari template Word sekolah.</p>
     <div class="card" style="margin-top:.8rem" id="ac-lh">${user.letterhead ? `<img src="${user.letterhead}" alt="Kop surat sekolah">` : `<p class="muted">Belum ada kop surat.</p>`}</div>
-    <div class="rowflex" style="margin-top:.7rem"><label class="btn sm">Unggah kop surat<input type="file" id="ac-file" accept="image/png,image/jpeg" hidden></label>${user.letterhead ? `<button class="btn sm danger" id="ac-lh-del">Hapus kop</button>` : ""}</div>
+    <div class="rowflex" style="margin-top:.7rem"><label class="btn sm">Unggah kop surat<input type="file" id="ac-file" accept="image/png,image/jpeg" hidden></label>${user.letterhead ? `<button class="btn sm danger" id="ac-lh-del">Hapus kop</button>` : ""}</div>` : ""}` : ""}
+    <h2 class="sec-h">Ganti kata sandi</h2>
+    ${pwForm("pw", "Ganti kata sandi")}
     <h2 class="sec-h">Sesi masuk</h2>
-    <p class="muted small" style="margin-bottom:.7rem">Penyimpanan data: ${store.mode === "lokal" ? "browser ini (mode percobaan)" : "database Supabase"}.</p>
     <button class="btn" id="ac-out">Keluar</button>
   </div></main>`;
   return {
     title: "Akun", html,
     mount(root, ctx) {
       const f = $("#ac", root);
-      f.addEventListener("submit", async (e) => {
+      f?.addEventListener("submit", async (e) => {
         e.preventDefault();
         if (!f.name.value.trim()) { toast("Isi nama lengkap Anda"); return; }
-        try { await store.updateProfile({ name: f.name.value.trim(), role: f.role.value, school: f.school.value.trim(), city: f.city.value.trim() }); toast("Perubahan disimpan"); ctx.reload(); } catch (ex) { toast(ex.message); }
+        try { await store.updateProfile({ name: f.name.value.trim(), role: f.role.value, city: f.city.value.trim() }); toast("Perubahan disimpan"); ctx.reload(); } catch (ex) { toast(ex.message); }
       });
-      $("#ac-file", root).addEventListener("change", async (e) => {
+      $("#ac-file", root)?.addEventListener("change", async (e) => {
         const file = e.target.files[0]; if (!file) return;
         try { await store.updateProfile({ letterhead: await fileToLetterhead(file) }); toast("Kop surat disimpan"); ctx.reload(); } catch (ex) { toast(ex.message); }
       });
       $("#ac-lh-del", root)?.addEventListener("click", async () => { await store.updateProfile({ letterhead: "" }); toast("Kop surat dihapus"); ctx.reload(); });
+      bindPwForm($("#pw", root), () => {});
       $("#ac-out", root).addEventListener("click", async () => { await store.signOut(); toast("Anda sudah keluar"); go("/"); });
     },
   };
 }
 
 /* ---------------- Admin ---------------- */
+// Admin sekolah mengelola akun di sekolahnya sendiri. Admin pusat (tanpa sekolah) mengelola semua sekolah.
 export async function admin({ user }) {
-  const d = await store.admin();
+  const [d, schools, classList] = await Promise.all([store.admin(), store.schools(), store.adminClasses()]);
+  let users = await store.adminUsers();
+  const sup = user.isSuper;
+  const schoolName = (id) => schools.find((s) => s.id === id)?.name || "-";
+  const schoolOpts = (withAll) => (withAll ? `<option value="">Semua sekolah (admin pusat)</option>` : "") + schools.map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join("");
+  const className = (c) => (sup ? `${schoolName(c.schoolId)} · ${c.name}` : c.name);
+
   const html = `${header(user, "admin")}<main class="page"><div class="wrap">
     <h1 class="page-title">Dasbor admin</h1>
-    <p class="page-sub">Ringkasan pemakaian Examus. ${store.mode === "lokal" ? "Dalam mode percobaan, angka di bawah hanya mencakup data di browser ini." : ""}</p>
+    <p class="page-sub">${sup ? "Admin pusat: semua sekolah." : `Sekolah: ${esc(d.scope || "-")}.`} Akun hanya bisa dibuat di sini.</p>
     <div class="kv" style="margin-top:1.4rem">
-      <div class="card"><div class="k">Pengguna</div><div class="v">${d.totals.users}</div></div>
+      <div class="card"><div class="k">Akun</div><div class="v">${d.totals.users}</div></div>
       <div class="card"><div class="k">Daftar kelas</div><div class="v">${d.totals.classes}</div></div>
       <div class="card"><div class="k">Sesi asesmen</div><div class="v">${d.totals.sessions}</div></div>
       <div class="card"><div class="k">Jawaban murid</div><div class="v">${d.totals.responses}</div></div>
     </div>
-    <h2 class="sec-h">Pengguna</h2>
-    <div class="tblwrap"><table class="tbl"><thead><tr><th>Email</th><th>Nama</th><th>Peran</th><th>Sekolah</th><th>Kota</th><th class="num">Sesi</th><th>Terdaftar</th></tr></thead>
-      <tbody>${d.users.map((u) => `<tr><td>${esc(u.email)}${u.isAdmin ? ' <span class="badge">admin</span>' : ""}</td><td>${esc(u.name || "-")}</td><td>${esc(u.role || "-")}</td><td>${esc(u.school || "-")}</td><td>${esc(u.city || "-")}</td><td class="num">${u.sessions}</td><td>${u.createdAt ? fmtShort(u.createdAt) : "-"}</td></tr>`).join("")}</tbody></table></div>
+
+    <h2 class="sec-h">Akun</h2>
+    <details class="card" id="add" style="margin-bottom:1rem"><summary style="cursor:pointer;font-weight:500">Tambah satu akun</summary>
+      <form id="add-form" novalidate style="margin-top:.8rem">
+        <div class="field"><span class="flabel" id="k-l">Jenis akun</span><div class="chips" role="radiogroup" aria-labelledby="k-l">
+          <label><input type="radio" name="kind" value="guru" checked><span>Guru</span></label>
+          <label><input type="radio" name="kind" value="siswa"><span>Siswa</span></label>
+          <label><input type="radio" name="kind" value="admin"><span>Admin</span></label></div></div>
+        ${sup ? `<label class="field" id="w-school"><span>Sekolah</span><select name="fschool" class="btn"></select></label>` : ""}
+        <div id="w-class" class="hide">
+          <label class="field"><span>Kelas</span><select name="fclass" class="btn">${classList.map((c) => `<option value="${c.id}">${esc(className(c))}</option>`).join("") || `<option value="">Belum ada kelas</option>`}</select></label>
+          <label class="field"><span>Murid</span><select name="fmember" class="btn"></select><span class="hint">Hanya murid yang belum punya akun.</span></label>
+        </div>
+        <label class="field"><span>Nama lengkap</span><input type="text" name="fname" autocomplete="off"></label>
+        <label class="field" id="w-title"><span>Peran di sekolah (opsional)</span><input type="text" name="ftitle" placeholder="Misalnya: Guru BK" autocomplete="off"></label>
+        <label class="field"><span>Nama akun</span><input type="text" name="fuser" autocomplete="off" autocapitalize="none" spellcheck="false"><span class="hint">Huruf kecil, angka, titik, garis bawah, atau strip. Tidak boleh sama dengan akun lain.</span></label>
+        <label class="field"><span>Kata sandi awal</span><div class="rowflex" style="gap:.5rem"><input type="text" name="fpass" autocomplete="off" spellcheck="false" style="flex:1"><button type="button" class="btn sm" id="f-rand">Acak</button></div><span class="hint">Pemilik akun diminta menggantinya saat masuk pertama.</span></label>
+        <p class="err" id="add-err" role="alert"></p>
+        <button class="btn primary">Buat akun</button>
+      </form>
+      <div id="add-result" style="margin-top:1rem"></div>
+    </details>
+    <details class="card" id="bulk" style="margin-bottom:1rem"><summary style="cursor:pointer;font-weight:500">Buat akun untuk satu kelas sekaligus</summary>
+      <p class="muted" style="margin-top:.6rem">Membuat akun untuk semua murid di kelas yang belum punya akun. Nama akun dan kata sandi dibuat otomatis. Daftar kelas dibuat guru lebih dulu.</p>
+      <div class="rowflex" style="margin-top:.7rem"><select id="b-class" class="btn">${classList.map((c) => `<option value="${c.id}">${esc(className(c))} (${c.members.length} murid)</option>`).join("") || `<option value="">Belum ada kelas</option>`}</select><button class="btn dark" id="b-go">Buat akun murid</button></div>
+      <div id="b-result" style="margin-top:1rem"></div>
+    </details>
+
+    <div class="rowflex" style="margin-bottom:.8rem;flex-wrap:wrap">
+      <input type="search" id="u-q" class="btn sm" placeholder="Cari nama atau nama akun" style="text-align:left;cursor:text;min-width:14rem" aria-label="Cari akun">
+      ${sup ? `<select id="u-school" class="btn sm" aria-label="Sekolah"><option value="">Semua sekolah</option>${schoolOpts(false)}</select>` : ""}
+      <select id="u-kind" class="btn sm" aria-label="Jenis akun"><option value="">Semua jenis</option><option value="siswa">Siswa</option><option value="guru">Guru</option><option value="admin">Admin</option></select>
+      <span class="muted small" id="u-count"></span>
+    </div>
+    <div class="tblwrap"><table class="tbl"><thead><tr><th>Nama akun</th><th>Nama</th><th>Jenis</th><th>Sekolah</th><th>Kata sandi</th><th>Aksi</th></tr></thead><tbody id="u-body"></tbody></table></div>
+    <p class="muted small" style="margin-top:.6rem">Kata sandi tampil hanya selama pemilik belum menggantinya. Setelah diganti, admin tidak bisa lagi melihatnya, tetapi bisa mengatur ulang bila lupa.</p>
+
+    ${sup ? `<h2 class="sec-h">Sekolah</h2>
+    <div class="stack" id="sch">${schools.map((s) => `<div class="rowflex"><input type="text" class="btn sm" value="${esc(s.name)}" data-id="${s.id}" aria-label="Nama sekolah" style="text-align:left;cursor:text"><button class="btn sm" data-act="save-school" data-id="${s.id}">Simpan</button></div>`).join("")}
+      <div class="rowflex"><input type="text" class="btn sm" id="sch-new" placeholder="Nama sekolah baru" style="text-align:left;cursor:text"><button class="btn sm" data-act="add-school">Tambah sekolah</button></div></div>` : ""}
+
     <h2 class="sec-h">Sesi asesmen</h2>
-    ${d.sessions.length ? `<div class="tblwrap"><table class="tbl"><thead><tr><th>Kelas</th><th>Asesmen</th><th>Pemilik</th><th class="num">Mengisi</th><th>Status</th><th>Dibuat</th></tr></thead>
-      <tbody>${d.sessions.map((s) => `<tr><td>${esc(s.className)}</td><td>${esc(getAssessment(s.type)?.name || s.type)}</td><td>${esc(s.owner || "-")}</td><td class="num">${s.filled} / ${s.total}</td><td><span class="badge${s.open ? "" : " closed"}">${s.open ? "Dibuka" : "Ditutup"}</span></td><td>${fmtShort(s.createdAt)}</td></tr>`).join("")}</tbody></table></div>`
+    ${d.sessions.length ? `<div class="tblwrap"><table class="tbl"><thead><tr><th>Kelas</th><th>Asesmen</th>${sup ? "<th>Sekolah</th>" : ""}<th>Guru</th><th class="num">Mengisi</th><th>Status</th><th>Dibuat</th></tr></thead>
+      <tbody>${d.sessions.map((s) => `<tr><td>${esc(s.className)}</td><td>${esc(getAssessment(s.type)?.name || s.type)}</td>${sup ? `<td>${esc(s.school || "-")}</td>` : ""}<td>${esc(s.owner || "-")}</td><td class="num">${s.filled} / ${s.total}</td><td><span class="badge${s.open ? "" : " closed"}">${s.open ? "Dibuka" : "Ditutup"}</span></td><td>${fmtShort(s.createdAt)}</td></tr>`).join("")}</tbody></table></div>`
       : `<div class="card"><p>Belum ada sesi asesmen.</p></div>`}
   </div></main>`;
-  return { title: "Dasbor admin", html };
+
+  return {
+    title: "Dasbor admin", html,
+    mount(root, ctx) {
+      const form = $("#add-form", root), err = $("#add-err", root);
+      const LIMIT = 300;
+
+      /* ----- tabel akun ----- */
+      const row = (u) => {
+        const detail = u.kind === "siswa" ? u.className : u.title;
+        const pw = u.password
+          ? `<code data-pw>••••••••</code> <button class="linkbtn" data-act="show">Lihat</button> <button class="linkbtn" data-act="copy">Salin</button>`
+          : `<span class="muted small">Sudah diganti pemilik</span>`;
+        return `<tr data-id="${u.id}"><td>${esc(u.username)}</td><td>${esc(u.name || "-")}${detail ? `<br><span class="meta">${esc(detail)}</span>` : ""}</td><td>${KIND[u.kind]}${u.kind === "admin" && !u.schoolId ? " pusat" : ""}</td><td>${esc(u.school || "Semua")}</td><td>${pw}</td><td style="white-space:nowrap"><button class="btn sm" data-act="reset">Atur ulang</button> <button class="btn sm danger" data-act="del">Hapus</button></td></tr>`;
+      };
+      const drawTable = () => {
+        const q = $("#u-q", root).value.trim().toLowerCase(), sc = $("#u-school", root)?.value || "", kd = $("#u-kind", root).value;
+        const list = users.filter((u) => (!q || `${u.name} ${u.username}`.toLowerCase().includes(q)) && (!sc || u.schoolId === sc) && (!kd || u.kind === kd));
+        $("#u-body", root).innerHTML = list.slice(0, LIMIT).map(row).join("") || `<tr><td colspan="6" class="muted">Tidak ada akun yang cocok.</td></tr>`;
+        $("#u-count", root).textContent = list.length > LIMIT ? `Menampilkan ${LIMIT} dari ${list.length}. Persempit pencarian.` : `${list.length} akun`;
+      };
+      const refresh = async () => { users = await store.adminUsers(); drawTable(); drawMembers(); };
+      ["input", "change"].forEach((ev) => { $("#u-q", root).addEventListener(ev, drawTable); $("#u-school", root)?.addEventListener(ev, drawTable); $("#u-kind", root).addEventListener(ev, drawTable); });
+
+      $("#u-body", root).addEventListener("click", async (e) => {
+        const b = e.target.closest("[data-act]"); if (!b) return;
+        const tr = b.closest("tr"), u = users.find((x) => x.id === tr.dataset.id); if (!u) return;
+        try {
+          if (b.dataset.act === "show") {
+            const code = $("[data-pw]", tr), hidden = code.textContent.startsWith("•");
+            code.textContent = hidden ? u.password : "••••••••"; b.textContent = hidden ? "Sembunyikan" : "Lihat";
+          } else if (b.dataset.act === "copy") {
+            const text = `Nama akun: ${u.username}\nKata sandi: ${u.password}`;
+            try { await navigator.clipboard.writeText(text); toast("Nama akun dan kata sandi disalin"); } catch { prompt("Salin teks ini:", text); }
+          } else if (b.dataset.act === "reset") {
+            const pw = prompt(`Kata sandi baru untuk ${u.name || u.username} (minimal 6 karakter):`, genPassword());
+            if (!pw) return;
+            await store.adminSetPassword(u.id, pw); toast("Kata sandi diatur ulang. Pemilik diminta menggantinya saat masuk."); await refresh();
+          } else if (b.dataset.act === "del") {
+            if (!confirm(`Hapus akun ${u.username} (${u.name})? Akun tidak bisa dipakai masuk lagi.${u.kind !== "siswa" ? " Kelas dan sesi miliknya dipindahkan ke akun Anda." : ""}`)) return;
+            await store.adminDeleteUser(u.id); toast("Akun dihapus"); await refresh();
+          }
+        } catch (ex) { toast(ex.message); }
+      });
+
+      /* ----- form tambah akun ----- */
+      let userTouched = false;
+      const kind = () => form.kind.value;
+      const syncName = () => {
+        if (kind() === "siswa") {
+          const m = (classList.find((c) => c.id === form.fclass.value)?.members || []).find((x) => String(x.no) === form.fmember.value);
+          form.fname.value = m ? m.name : "";
+        }
+        if (!userTouched) form.fuser.value = suggestUsername(form.fname.value) + (kind() === "siswa" && form.fname.value ? String(Math.floor(100 + Math.random() * 900)) : "");
+      };
+      function drawMembers() {
+        const c = classList.find((x) => x.id === form.fclass.value);
+        const taken = new Set(users.filter((u) => u.kind === "siswa" && u.classId === c?.id).map((u) => u.memberNo));
+        const free = (c?.members || []).filter((m) => !taken.has(m.no));
+        form.fmember.innerHTML = free.length ? free.map((m) => `<option value="${m.no}">${m.no}. ${esc(m.name)}</option>`).join("") : `<option value="">Semua murid sudah punya akun</option>`;
+        syncName();
+      }
+      const syncKind = () => {
+        const k = kind();
+        $("#w-class", root).classList.toggle("hide", k !== "siswa");
+        $("#w-title", root).classList.toggle("hide", k !== "guru");
+        const ws = $("#w-school", root);
+        if (ws) { ws.classList.toggle("hide", k === "siswa"); form.fschool.innerHTML = schoolOpts(k === "admin"); }
+        form.fname.readOnly = k === "siswa";
+        if (k === "siswa") drawMembers(); else syncName();
+      };
+      form.querySelectorAll('input[name="kind"]').forEach((r) => r.addEventListener("change", syncKind));
+      form.fclass.addEventListener("change", drawMembers);
+      form.fmember.addEventListener("change", syncName);
+      form.fname.addEventListener("input", syncName);
+      form.fuser.addEventListener("input", () => { userTouched = true; });
+      $("#f-rand", root).addEventListener("click", () => { form.fpass.value = genPassword(); });
+      form.fpass.value = genPassword();
+      syncKind();
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault(); err.textContent = "";
+        const k = kind();
+        const payload = { kind: k, username: form.fuser.value.trim(), password: form.fpass.value, name: form.fname.value.trim(), title: form.ftitle.value.trim(),
+          schoolId: sup ? form.fschool.value || null : null, classId: k === "siswa" ? form.fclass.value : null, memberNo: k === "siswa" ? Number(form.fmember.value) : null };
+        if (k === "siswa" && !payload.memberNo) { err.textContent = "Pilih murid yang belum punya akun."; return; }
+        if (!payload.name) { err.textContent = "Isi nama lengkap."; return; }
+        if (!payload.username) { err.textContent = "Isi nama akun."; return; }
+        if (sup && k === "guru" && !payload.schoolId) { err.textContent = "Pilih sekolah."; return; }
+        const btn = form.querySelector(".btn.primary"); btn.disabled = true;
+        try {
+          const r = await store.adminCreateUser(payload);
+          $("#add-result", root).innerHTML = `<div class="card sky"><b style="font-weight:500">Akun dibuat untuk ${esc(r.name)}</b><p style="margin-top:.4rem">Nama akun: <code>${esc(r.username)}</code><br>Kata sandi: <code>${esc(r.password)}</code></p><p class="muted small" style="margin-top:.4rem">Bagikan kepada pemiliknya. Mereka diminta mengganti kata sandi saat masuk pertama.</p></div>`;
+          form.fpass.value = genPassword(); userTouched = false; if (k !== "siswa") form.fname.value = ""; form.fuser.value = ""; form.ftitle.value = "";
+          await refresh();
+        } catch (ex) { err.textContent = ex.message; }
+        btn.disabled = false;
+      });
+
+      /* ----- akun satu kelas sekaligus ----- */
+      let lastBulk = [], lastClass = "";
+      $("#b-go", root).addEventListener("click", async (e) => {
+        const id = $("#b-class", root).value; if (!id) { toast("Pilih kelas lebih dulu"); return; }
+        e.currentTarget.disabled = true;
+        try {
+          lastBulk = await store.adminCreateStudents(id);
+          lastClass = classList.find((c) => c.id === id)?.name || "kelas";
+          const out = $("#b-result", root);
+          out.innerHTML = lastBulk.length
+            ? `<p style="margin-bottom:.6rem"><b style="font-weight:500">${lastBulk.length} akun dibuat.</b> Unduh dan bagikan ke murid. Daftar ini juga bisa dibuka lagi di tabel Akun sampai murid mengganti kata sandinya.</p>
+               <div class="tblwrap"><table class="tbl"><thead><tr><th>No</th><th>Nama</th><th>Nama akun</th><th>Kata sandi</th></tr></thead><tbody>${lastBulk.map((r) => `<tr><td>${r.no}</td><td>${esc(r.name)}</td><td><code>${esc(r.username)}</code></td><td><code>${esc(r.password)}</code></td></tr>`).join("")}</tbody></table></div>
+               <button class="btn sm" id="b-csv" style="margin-top:.7rem">Unduh CSV</button>`
+            : `<p class="muted">Semua murid di kelas ini sudah punya akun.</p>`;
+          $("#b-csv", root)?.addEventListener("click", () => download(`akun-${lastClass.replace(/\s+/g, "-").toLowerCase()}.csv`, toCSV([["No", "Nama", "Nama akun", "Kata sandi"], ...lastBulk.map((r) => [r.no, r.name, r.username, r.password])]), "text/csv"));
+          await refresh();
+        } catch (ex) { toast(ex.message); }
+        e.currentTarget.disabled = false;
+      });
+
+      /* ----- sekolah (admin pusat) ----- */
+      $("#sch", root)?.addEventListener("click", async (e) => {
+        const b = e.target.closest("[data-act]"); if (!b) return;
+        try {
+          if (b.dataset.act === "save-school") {
+            const name = $(`input[data-id="${b.dataset.id}"]`, root).value.trim(); if (!name) { toast("Isi nama sekolah"); return; }
+            await store.saveSchool({ id: b.dataset.id, name }); toast("Nama sekolah disimpan"); ctx.reload();
+          } else if (b.dataset.act === "add-school") {
+            const name = $("#sch-new", root).value.trim(); if (!name) { toast("Isi nama sekolah"); return; }
+            await store.saveSchool({ name }); toast("Sekolah ditambahkan"); ctx.reload();
+          }
+        } catch (ex) { toast(ex.message); }
+      });
+
+      drawTable();
+    },
+  };
 }

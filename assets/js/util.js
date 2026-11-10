@@ -81,6 +81,18 @@ export function parseRoster(text) {
   return out;
 }
 
-export const siteBase = () => location.origin + location.pathname;
-export const studentLink = (code) => siteBase() + "#/s/" + code;
 export const go = (path) => { location.hash = "#" + path; };
+
+// Halaman awal setelah masuk, sesuai jenis akun.
+export const homePath = (user) => (!user ? "/masuk" : user.kind === "siswa" ? "/siswa" : user.isSuper ? "/admin" : "/dasbor");
+
+// Kata sandi acak 8 karakter tanpa huruf yang mudah tertukar (l, i, o, 0, 1).
+export function genPassword(len = 8) {
+  const abc = "abcdefghjkmnpqrstuvwxyz23456789";
+  const buf = new Uint32Array(len);
+  crypto.getRandomValues(buf);
+  return [...buf].map((n) => abc[n % abc.length]).join("");
+}
+
+// Nama akun usulan dari nama lengkap: "Arya Wibowo" -> "arya.wibowo".
+export const suggestUsername = (name) => String(name || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").split(/\s+/).map((w) => w.replace(/[^a-z0-9]/g, "")).filter(Boolean).slice(0, 2).join(".");

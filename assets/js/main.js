@@ -1,25 +1,28 @@
-import { store } from "./store.js";
-import { esc, go } from "./util.js";
+import { store, configured } from "./store.js";
+import { esc, go, homePath } from "./util.js";
 import { landing, blog, post, legal, login, notFound, header } from "./pages-public.js";
-import { onboarding, dashboard, classes, classEdit, start, session, account, admin } from "./pages-app.js";
+import { onboarding, dashboard, classes, classEdit, start, session, account, admin, changePassword } from "./pages-app.js";
 import { report } from "./reports.js";
-import { student } from "./pages-student.js";
+import { studentHome, studentFill } from "./pages-student.js";
 
-// auth: "user" = harus masuk, "admin" = harus admin
+// auth: "any" = semua akun yang sudah masuk, "staff" = guru dan admin,
+//       "student" = siswa, "admin" = admin
 const ROUTES = [
   ["/", landing],
   ["/blog", blog],
   ["/blog/:slug", post],
   ["/masuk", login],
-  ["/s/:code", student],
-  ["/kenalan", onboarding, "user"],
-  ["/dasbor", dashboard, "user"],
-  ["/kelas", classes, "user"],
-  ["/kelas/:id", classEdit, "user"],
-  ["/mulai/:type", start, "user"],
-  ["/sesi/:id", session, "user"],
-  ["/sesi/:id/hasil", report, "user"],
-  ["/akun", account, "user"],
+  ["/ganti-sandi", changePassword, "any"],
+  ["/siswa", studentHome, "student"],
+  ["/isi/:id", studentFill, "student"],
+  ["/kenalan", onboarding, "staff"],
+  ["/dasbor", dashboard, "staff"],
+  ["/kelas", classes, "staff"],
+  ["/kelas/:id", classEdit, "staff"],
+  ["/mulai/:type", start, "staff"],
+  ["/sesi/:id", session, "staff"],
+  ["/sesi/:id/hasil", report, "staff"],
+  ["/akun", account, "any"],
   ["/admin", admin, "admin"],
 ];
 
@@ -38,16 +41,27 @@ function match(path) {
 const app = document.getElementById("app");
 let token = 0;
 
+const setupNotice = () => `<main class="page"><div class="narrow"><h1 class="page-title">Examus belum dihubungkan ke database</h1>
+  <p class="page-sub">Isi <b>SUPABASE_URL</b> dan <b>SUPABASE_ANON_KEY</b> di <code>assets/js/config.js</code>, lalu deploy ulang. Langkah lengkapnya ada di README.</p></div></main>`;
+
 async function render() {
   const mine = ++token;
+  if (!configured) { app.innerHTML = setupNotice(); return; }
   const raw = location.hash.replace(/^#/, "") || "/";
   const [path, qs = ""] = raw.split("?");
   const { page, params, auth } = match(path.replace(/\/+$/, "") || "/");
   try {
     const user = await store.me();
     if (auth && !user) { go("/masuk?lanjut=" + encodeURIComponent(path)); return; }
-    if (auth === "admin" && !user.isAdmin) { go("/dasbor"); return; }
-    if (auth === "user" && !user.onboarded && page !== onboarding) { go("/kenalan"); return; }
+    if (user) {
+      // Akun baru wajib mengganti kata sandi dari admin sebelum memakai apa pun.
+      if (user.mustChange && page !== changePassword) { go("/ganti-sandi"); return; }
+      if (auth === "admin" && !user.isAdmin) { go(homePath(user)); return; }
+      if (auth === "staff" && user.kind === "siswa") { go("/siswa"); return; }
+      if (auth === "student" && user.kind !== "siswa") { go(homePath(user)); return; }
+      if (page === dashboard && user.isSuper) { go("/admin"); return; }
+      if (auth === "staff" && user.kind === "guru" && !user.onboarded && page !== onboarding) { go("/kenalan"); return; }
+    }
     const ctx = { user, params, query: new URLSearchParams(qs), reload: render };
     const view = await page(ctx);
     if (mine !== token) return;
