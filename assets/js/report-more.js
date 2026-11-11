@@ -155,35 +155,64 @@ export function kekuatanReport(s, res) {
 
 /* ---------------- Suasana hati (PHQ-9) ---------------- */
 export function emosiReport(s, res) {
-  const cfg = s.config || {}, items = phqItems(cfg);
+  const cfg = s.config || {}, items = phqItems(cfg), has9 = items.length === 9, MAX = items.length * 3;
   const rows = join(s, res, (a) => phqProfile(a, cfg)), done = rows.filter((r) => r.filled);
-  const today = done.filter((r) => r.p.priority === "hari ini"), week = done.filter((r) => r.p.priority === "minggu ini"), watch = done.filter((r) => r.p.priority === "pantau");
+  const level = (l) => done.filter((r) => r.p.level === l).sort((a, b) => b.p.total - a.p.total);
+  const today = level(3), week = level(2), watch = level(1);
+  const positives = done.filter((r) => r.p.positive);
   const BANDS = ["Minimal", "Ringan", "Sedang", "Sedang-berat", "Berat"];
+  const IMPACT = ["Tidak sulit sama sekali", "Agak sulit", "Sangat sulit", "Amat sangat sulit"];
+  const note = (r) => ({ name: r.name, note: r.p.reasons.join("; ") });
   const body = `
-    ${cfg.variant === "phq8" ? `<div class="notice">Sesi ini memakai PHQ-8 (tanpa pertanyaan tentang menyakiti diri). Tetap tanyakan keselamatan saat berbicara dengan murid yang skornya tinggi.</div>` : ""}
+    ${!has9 ? `<div class="notice"><b style="font-weight:600">Sesi ini memakai PHQ-8 (tanpa pertanyaan nomor 9).</b> Laporan ini tidak bisa menunjukkan siapa yang berpikir menyakiti diri. Pada setiap murid dengan skor 10 ke atas, tanyakan keselamatannya secara langsung saat bertemu, dan perlakukan skor 20 ke atas sebagai prioritas hari ini.</div>` : ""}
+    <div class="sumcards" style="margin-top:1.2rem">
+      <div class="card"><p class="k">Sudah mengisi</p><p><span class="big-num">${done.length}</span> <span class="muted">dari ${rows.length} murid</span></p></div>
+      <div class="card"><p class="k">Skor 10 ke atas</p><p><span class="big-num">${positives.length}</span> <span class="muted">murid (${pct(positives.length, done.length)}%)</span></p><p class="muted small" style="margin-top:.3rem">Skrining positif, perlu evaluasi lanjut oleh tenaga profesional.</p></div>
+      <div class="card${today.length ? " warn" : ""}"><p class="k">Dihubungi hari ini</p><p><span class="big-num">${today.length}</span> <span class="muted">murid</span></p></div>
+    </div>
+
     <h2 class="sec-h">Siapa dihubungi</h2>
-    <div class="sumcards">${prio("Hari ini", "warn", today.map((r) => ({ name: r.name, note: r.p.item9 ? "menjawab nomor 9" : `skor ${r.p.total}` })), "Skor 20 ke atas atau menjawab selain \"tidak pernah\" pada pertanyaan nomor 9.")}
-      ${prio("Minggu ini", "warn", week.map((r) => ({ name: r.name, note: `skor ${r.p.total}` })), "Skor 15 sampai 19.")}
-      ${prio("Pantau", "", watch.map((r) => ({ name: r.name, note: `skor ${r.p.total}` })), "Skor 10 sampai 14. Ajak bicara dan ulangi skrining 2 sampai 4 minggu lagi.")}</div>
-    <h2 class="sec-h">Sebaran tingkat gejala</h2>
+    <div class="sumcards">${prio("Hari ini", "warn", today.map(note), (has9 ? "Menjawab selain \"tidak pernah\" pada nomor 9, atau skor 20 ke atas." : "Skor 20 ke atas.") + " Tanya keselamatan langsung, jangan tinggalkan sendirian bila ada rencana menyakiti diri.")}
+      ${prio("Minggu ini", "warn", week.map(note), "Skor 15 sampai 19, atau skor 10 ke atas dengan fungsi sangat terganggu. Temui dalam minggu ini dan pertimbangkan rujukan.")}
+      ${prio("Pantau", "", watch.map(note), "Skor 10 sampai 14, atau skor 5 sampai 9 dengan fungsi sangat terganggu, atau pola gejala mayor. Ajak bicara dan ulangi skrining 2 sampai 4 minggu lagi.")}</div>
+
+    <h2 class="sec-h">Sebaran tingkat keparahan</h2>
     <div class="card">${bars(BANDS.map((b) => [b, done.filter((r) => r.p.band === b).length, `${done.filter((r) => r.p.band === b).length} murid`]), Math.max(1, done.length), "")}</div>
+
     <h2 class="sec-h">Sebaran gejala</h2>
-    ${tbl([{ t: "Gejala", wrap: 1 }, { t: "Lebih dari seminggu atau hampir setiap hari", num: 1 }], items.map((t, i) => [`${i + 1}. ${t[0].toUpperCase() + t.slice(1)}`, `${pct(done.filter((r) => Number(r.a[i]) >= 2).length, done.length)}%`]))}
+    <p class="muted">Persentase murid yang menjawab tiap gejala. Kolom kedua (lebih dari seminggu atau lebih) adalah ambang yang dihitung sebagai gejala pada algoritma PHQ-9.</p>
+    ${tbl([{ t: "Gejala", wrap: 1 }, { t: "Beberapa hari atau lebih", num: 1 }, { t: "Lebih dari seminggu atau lebih", num: 1 }], items.map((t, i) => [`${i + 1}. ${t[0].toUpperCase() + t.slice(1)}`, `${pct(done.filter((r) => Number(r.a[i]) >= 1).length, done.length)}%`, `${pct(done.filter((r) => Number(r.a[i]) >= 2).length, done.length)}%`]))}
+
     <h2 class="sec-h">Skor per murid</h2>
-    ${tbl(["No", "Nama", { t: "Skor", num: 1 }, "Tingkat", ...(items.length === 9 ? [{ t: "No. 9", num: 1 }] : []), "Dampak"], rows.map((r) => (r.filled
-      ? [r.no, r.name, r.p.total, r.p.band, ...(items.length === 9 ? [r.p.item9] : []), PHQ_IMPACT[r.p.impact]?.t || "-"]
-      : [r.no, r.name, "-", "Belum mengisi", ...(items.length === 9 ? ["-"] : []), "-"])))}
-    <p class="muted small" style="margin-top:.5rem">Skor 0 sampai ${items.length * 3}. Tingkat: 0-4 minimal, 5-9 ringan, 10-14 sedang, 15-19 sedang-berat, 20-27 berat (pita standar PHQ-9, Kroenke dkk. 2001). Skor 10 ke atas dianjurkan evaluasi lanjut oleh tenaga profesional. Jawaban apa pun selain "tidak pernah" pada nomor 9 perlu ditanyakan langsung pada hari yang sama, berapa pun skor totalnya.</p>
+    ${tbl(["No", "Nama", { t: `Skor (0-${MAX})`, num: 1 }, "Tingkat", ...(has9 ? [{ t: "No. 9", num: 1 }] : []), { t: "Gejala", num: 1 }, "Inti", "Pola", "Fungsi", "Prioritas"], rows.map((r) => (r.filled
+      ? [r.no, r.name, r.p.total, r.p.band, ...(has9 ? [r.p.item9 ? { html: `<b>${r.p.item9}</b>` } : 0] : []), r.p.count, r.p.core ? "ya" : "-", r.p.pattern === "mayor" ? "mayor" : r.p.pattern === "lain" ? "lain" : "-", IMPACT[r.p.impact], r.p.priority || "-"]
+      : [r.no, r.name, "-", "Belum mengisi", ...(has9 ? ["-"] : []), "-", "-", "-", "-", "-"])))}
+    <p class="muted small" style="margin-top:.5rem">Skor 0-${MAX}. Gejala = jumlah gejala "lebih dari seminggu" atau lebih (nomor 9 dihitung bila dijawab selain "tidak pernah"). Inti = nomor 1 atau 2 termasuk gejala. Pola = indikasi algoritma PHQ-9 (lihat istilah di bawah).</p>
     ${unfilled(rows)}
+
+    <h2 class="sec-h">Keterangan istilah</h2>
+    <dl class="gloss">
+      <dt>Skor total</dt><dd>Jumlah nilai semua pertanyaan (tidak pernah 0, beberapa hari 1, lebih dari seminggu 2, hampir setiap hari 3). ${has9 ? "PHQ-9: 0 sampai 27." : "PHQ-8: 0 sampai 24, karena nomor 9 tidak ditanyakan."}</dd>
+      <dt>Tingkat keparahan</dt><dd>Pita standar PHQ-9 yang berlaku juga untuk PHQ-8: 0-4 minimal, 5-9 ringan, 10-14 sedang, 15-19 sedang-berat, 20 ke atas berat (Kroenke dkk., 2001 dan 2009).</dd>
+      <dt>Skor 10 ke atas (skrining positif)</dt><dd>Titik potong yang lazim dipakai untuk menandai murid yang perlu evaluasi lanjut. Pada remaja usia 13 sampai 17, penelitian (Richardson dkk., 2010) menemukan titik potong 11 paling seimbang, jadi skor tepat 10 perlu dibaca dengan wawancara. Titik potong ini menjaring murid untuk dievaluasi, bukan menetapkan diagnosis.</dd>
+      <dt>Nomor 9</dt><dd>Pertanyaan tentang pikiran ingin mati atau menyakiti diri. Jawaban apa pun selain "tidak pernah" ditindaklanjuti pada hari yang sama, berapa pun skor totalnya.</dd>
+      <dt>Gejala dan gejala inti</dt><dd>Sebuah gejala dihitung bila dijawab "lebih dari seminggu" atau lebih (nomor 9 dihitung bila ada sama sekali). Gejala inti adalah nomor 1 (kurang tertarik atau senang) dan nomor 2 (sedih, murung, putus asa).</dd>
+      <dt>Pola gejala (mayor / lain)</dt><dd>Indikasi dari algoritma diagnostik PHQ-9. Mayor: lima gejala atau lebih, termasuk gejala inti. Lain: dua sampai empat gejala, termasuk gejala inti. Ini petunjuk bagi psikolog untuk wawancara klinis, bukan diagnosis.</dd>
+      <dt>Fungsi (dampak)</dt><dd>Jawaban murid atas seberapa sulit gejala itu membuatnya belajar, mengurus urusan di rumah, atau bergaul. "Agak sulit" atau lebih berat memperkuat dugaan adanya gangguan fungsi. Di Examus, "sangat sulit" atau lebih menaikkan prioritas satu tingkat; ini kebijakan Examus, bukan bagian baku PHQ-9.</dd>
+      <dt>Prioritas</dt><dd><b>Hari ini</b>: nomor 9 dijawab, atau skor 20 ke atas. <b>Minggu ini</b>: skor 15-19, atau skor 10 ke atas dengan fungsi sangat terganggu. <b>Pantau</b>: skor 10-14, atau 5-9 dengan fungsi sangat terganggu, atau pola mayor. Prioritas adalah urutan menemui murid, bukan tingkat diagnosis.</dd>
+      <dt>Perubahan bermakna</dt><dd>Bila skrining diulang, perubahan skor 5 poin atau lebih dianggap bermakna secara klinis (Löwe dkk., 2004). Examus belum membandingkan antar sesi, jadi catat skornya sendiri.</dd>
+    </dl>
+
     ${tips("Protokol tindak lanjut", [
-      "<b>Hari ini:</b> temui murid secara pribadi. Tanyakan langsung tentang keselamatannya. Bila ada rencana menyakiti diri, jangan tinggalkan sendirian, hubungi orang tua, dan rujuk ke puskesmas, psikolog, atau layanan darurat 112.",
-      "<b>Minggu ini:</b> ajak bicara, kabari orang tua dengan izin murid, dan pertimbangkan rujukan ke psikolog atau puskesmas.",
-      "<b>Pantau:</b> sapa secara berkala, libatkan wali kelas, dan ulangi skrining dalam 2 sampai 4 minggu.",
-      "Catat setiap tindak lanjut beserta tanggalnya.",
-      "Jangan menyebut kata \"depresi\" kepada murid; hasil ini skrining, bukan diagnosis.",
+      "<b>Hari ini:</b> temui murid secara pribadi di tempat yang aman. Tanyakan langsung dan tenang tentang pikiran menyakiti diri, rencana, dan sarana. Bila ada rencana atau niat, jangan tinggalkan sendirian, hubungi orang tua atau wali, dan rujuk segera ke IGD, puskesmas, atau psikolog.",
+      "<b>Minggu ini:</b> ajak bicara, kabari orang tua dengan izin murid, dan pertimbangkan rujukan ke psikolog atau puskesmas. Cari tahu apa yang berubah belakangan ini (keluarga, teman, sekolah, kehilangan).",
+      "<b>Pantau:</b> sapa secara berkala, libatkan wali kelas, dan ulangi skrining dalam 2 sampai 4 minggu. Skor 5 sampai 9 tanpa gangguan fungsi cukup dipantau (watchful waiting).",
+      "Murid dengan skor di bawah 10 tetap boleh datang kapan saja. Tidak adanya tanda di laporan bukan jaminan murid baik-baik saja.",
+      "Catat setiap tindak lanjut beserta tanggalnya. Simpan hasil secara rahasia dan bagikan hanya kepada pihak yang perlu tahu.",
+      "Jangan menyebut kata \"depresi\" atau menunjukkan skor kepada murid; hasil ini skrining, bukan diagnosis.",
     ])}
-    ${caveat("PHQ-9 adalah alat skrining (Kroenke, Spitzer & Williams), bukan diagnosis. Kalimat di Examus adalah terjemahan bebas berbahasa remaja dan belum divalidasi untuk murid Indonesia. Hasil ini data kesehatan yang sensitif: simpan dan bicarakan secara rahasia.")}`;
-  return { body, csv: () => [["No", "Nama", "L/P", ...items.map((_, i) => `B${i + 1}`), "Skor", "Tingkat", "Dampak"], ...rows.map((r) => (r.filled ? [r.no, r.name, r.g, ...items.map((_, i) => r.a[i]), r.p.total, r.p.band, r.p.impact] : [r.no, r.name, r.g, ...items.map(() => ""), "", "Belum mengisi", ""]))] };
+    ${caveat("PHQ-9 dan PHQ-8 adalah alat skrining (Kroenke, Spitzer & Williams), bukan diagnosis. Diagnosis dan keputusan tindak lanjut ada pada psikolog atau tenaga kesehatan. Kalimat di Examus berbahasa remaja dan belum divalidasi secara khusus untuk murid Indonesia; pakai versi Indonesia yang tervalidasi bila tersedia. Di populasi sekolah, banyak murid dengan skor tinggi ternyata tidak memenuhi kriteria gangguan setelah diwawancara, jadi hasil perlu dikonfirmasi. Hasil ini data kesehatan yang sensitif: simpan dan bicarakan secara rahasia.")}`;
+  return { body, csv: () => [["No", "Nama", "L/P", ...items.map((_, i) => `B${i + 1}`), "Skor", "Tingkat", "Jumlah gejala", "Gejala inti", "Pola", "Dampak (0-3)", "Prioritas"], ...rows.map((r) => (r.filled ? [r.no, r.name, r.g, ...items.map((_, i) => r.a[i]), r.p.total, r.p.band, r.p.count, r.p.core ? "ya" : "tidak", r.p.pattern, r.p.impact, r.p.priority] : [r.no, r.name, r.g, ...items.map(() => ""), "", "Belum mengisi"]))] };
 }
 
 /* ---------------- Tipe kepribadian ---------------- */

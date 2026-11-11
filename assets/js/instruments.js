@@ -110,14 +110,35 @@ export const PHQ_ITEMS = [
 export const PHQ_OPTS = [{ v: 0, t: "Tidak pernah" }, { v: 1, t: "Beberapa hari" }, { v: 2, t: "Lebih dari seminggu" }, { v: 3, t: "Hampir setiap hari" }];
 export const PHQ_IMPACT = [{ v: 0, t: "Tidak sulit sama sekali" }, { v: 1, t: "Agak sulit" }, { v: 2, t: "Sangat sulit" }, { v: 3, t: "Amat sangat sulit" }];
 export const phqItems = (cfg) => (cfg.variant === "phq8" ? PHQ_ITEMS.slice(0, 8) : PHQ_ITEMS);
+// Penilaian mengikuti panduan PHQ-9 (Kroenke, Spitzer & Williams, 2001) dan PHQ-8 (Kroenke dkk., 2009):
+//  - skor total: PHQ-9 0-27, PHQ-8 0-24 (butir nomor 9 tidak ada di PHQ-8);
+//  - pita keparahan sama untuk keduanya: 0-4 minimal, 5-9 ringan, 10-14 sedang, 15-19 sedang-berat, 20 ke atas berat;
+//  - skor 10 ke atas = skrining positif, perlu evaluasi lanjut (pada remaja 13-17, Richardson dkk. 2010
+//    menemukan titik potong 11 paling seimbang antara sensitivitas dan spesifisitas);
+//  - nomor 9 dijawab selain "tidak pernah" = tanya risiko bunuh diri langsung pada hari yang sama, berapa pun skor total;
+//  - algoritma diagnostik PHQ-9: pola depresi mayor bila 5 gejala atau lebih ada "lebih dari separuh hari" (nomor 9
+//    dihitung bila ada sama sekali) dan salah satunya nomor 1 atau 2; pola lain bila 2-4 gejala termasuk nomor 1 atau 2.
+//    Ini hanya indikasi, bukan diagnosis;
+//  - dampak ("agak sulit" atau lebih berat) memperkuat dugaan. Pengaruh dampak pada prioritas di sini adalah
+//    kebijakan Examus (naik satu tingkat bila "sangat sulit" atau lebih), bukan bagian baku PHQ-9.
 export function phqProfile(a, cfg) {
-  const n = phqItems(cfg).length;
-  let total = 0; for (let i = 0; i < n; i++) total += Number(a?.[i]) || 0;
-  const item9 = n === 9 ? Number(a?.[8]) || 0 : 0;
-  // Pita keparahan standar PHQ-9 (Kroenke dkk., 2001): 0-4, 5-9, 10-14, 15-19, 20-27. Skor 10 ke atas = perlu evaluasi lanjut.
+  const n = phqItems(cfg).length, v = (i) => Number(a?.[i]) || 0;
+  let total = 0; for (let i = 0; i < n; i++) total += v(i);
+  const item9 = n === 9 ? v(8) : 0;
   const band = total >= 20 ? "Berat" : total >= 15 ? "Sedang-berat" : total >= 10 ? "Sedang" : total >= 5 ? "Ringan" : "Minimal";
-  const priority = item9 >= 1 || total >= 20 ? "hari ini" : total >= 15 ? "minggu ini" : total >= 10 ? "pantau" : "";
-  return { total, item9, band, priority, impact: Number(a?.impact) || 0 };
+  const impact = Number(a?.impact) || 0;
+  let count = 0; for (let i = 0; i < 8; i++) if (v(i) >= 2) count++;
+  if (item9 >= 1) count++;
+  const core = v(0) >= 2 || v(1) >= 2;
+  const pattern = core && count >= 5 ? "mayor" : core && count >= 2 ? "lain" : "";
+  let level = item9 >= 1 || total >= 20 ? 3 : total >= 15 ? 2 : total >= 10 ? 1 : 0;
+  const reasons = [];
+  if (item9 >= 1) reasons.push("menjawab nomor 9");
+  if (total >= 10) reasons.push(`skor ${total} (${band.toLowerCase()})`);
+  if (impact >= 2 && total >= 5 && level < 3) { level = Math.max(level, total >= 10 ? 2 : 1); reasons.push("fungsi sangat terganggu"); }
+  else if (pattern === "mayor" && level === 0) { level = 1; reasons.push("pola gejala mayor"); }
+  const priority = ["", "pantau", "minggu ini", "hari ini"][level];
+  return { total, max: n * 3, item9, band, priority, level, impact, count, core, pattern, reasons, positive: total >= 10 };
 }
 
 /* ---------------- Tipe kepribadian ---------------- */
