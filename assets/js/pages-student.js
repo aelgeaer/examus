@@ -99,7 +99,6 @@ export async function student({ params }) {
   if (!pub) return { title: "Angket", html: message("Link tidak ditemukan", "Periksa lagi link dari gurumu, atau minta link yang baru.") };
   if (!pub.open) return { title: "Angket", html: message("Pengisian sudah ditutup", "Terima kasih. Hubungi gurumu kalau kamu belum sempat mengisi.") };
 
-  if (pub.type === "gaya-belajar") return gayaFlow(pub);
   if (pub.type === "sosiometri") return socioFlow(pub, top);
   // Sesi minat karier lama (18 butir, skala 3) tetap memakai alur lama.
   if (INSTR[pub.type] && !(pub.type === "minat-karier" && pub.config?.scale !== 5)) return scaleFlow(pub, top);

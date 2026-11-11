@@ -533,3 +533,43 @@ a.opt.addq .d { margin-left: 0; }
 .tksplit .bar { height: 18px; background: var(--sun); border-radius: 999px; overflow: hidden; }
 .tksplit .bar i { display: block; height: 100%; background: var(--blue); }
 @media (max-width: 640px) { .ggroups.g3 { grid-template-columns: 1fr; } .tkgrid { grid-template-columns: repeat(2, 1fr); } .tksplit { grid-template-columns: 1fr; } .tksplit span:last-child { text-align: left; } }
+
+/* Ringkasan sebelum kirim */
+.gb-nav { display: flex; justify-content: space-between; margin-top: 1.2rem; }
+.gb-nav .gb-ghost { margin: 0; }
+.rv { list-style: none; padding: 0; margin: 1.2rem 0 0; display: grid; gap: .45rem; }
+.rv button { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: .3rem 1rem; flex-wrap: wrap; text-align: left; background: #fff; border: 2px solid transparent; border-radius: 16px; padding: .8rem 1rem; font: inherit; cursor: pointer; }
+.rv button:hover { border-color: var(--sky-mid); }
+.rv .q { color: var(--ink-2); flex: 1 1 18rem; }
+.rv .a { font-weight: 500; }
+.rv .a.none { color: var(--danger); }
+.rv-bar { position: sticky; bottom: 0; background: var(--paper); padding: .9rem 0 calc(.6rem + env(safe-area-inset-bottom)); margin-top: .6rem; }
+.rv-bar .gb-ghost { margin-top: .3rem; }
+
+/* Hasil minat */
+.radar-wrap { display: flex; justify-content: center; margin: .6rem 0 0; }
+.radar { width: 100%; max-width: 440px; height: auto; }
+.center { text-align: center; }
+p.lead.center { margin-inline: auto; max-width: 34em; }
+
+/* Laporan minat */
+.radar2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; align-items: center; margin-top: 1rem; }
+.rbars .b { display: grid; grid-template-columns: 1.2em 7.5em 1fr 2.6em; gap: .5rem; align-items: center; font-size: .9rem; }
+.rbars .b + .b { margin-top: .45rem; }
+.rbars .track { height: 10px; background: var(--sky-soft); border-radius: 999px; overflow: hidden; }
+.rbars .track i { display: block; height: 100%; background: var(--blue); }
+.rbars .val { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.talk { list-style: none; padding: 0; margin-top: .7rem; display: grid; gap: .4rem; }
+.talk li { display: flex; justify-content: space-between; gap: .6rem; background: #fde2e2; border-radius: 12px; padding: .65rem .9rem; }
+.linkname { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-decoration: underline; text-decoration-color: var(--sky-mid); text-underline-offset: 3px; cursor: pointer; text-align: left; }
+dialog.sheet { border: 0; border-radius: 22px; padding: 1.4rem; width: min(440px, calc(100% - 2rem)); background: var(--paper); color: var(--ink); }
+dialog.sheet::backdrop { background: rgba(12, 35, 64, .45); }
+.mkhead { display: grid; grid-template-columns: 150px 1fr; gap: 1rem; align-items: center; }
+.mkhead h2 { font-size: clamp(1.6rem, 6vw, 2.2rem); line-height: 1.1; }
+@media (max-width: 640px) { .radar2 { grid-template-columns: 1fr; } }
+
+/* Pita kekuatan & kesulitan */
+.lv { display: inline-block; min-width: 2em; text-align: center; border-radius: 999px; padding: .05rem .5rem; }
+.lv.l1 { background: var(--sun-soft); }
+.lv.l2 { background: #fbd0a6; }
+.lv.l3 { background: #f6b3b3; }

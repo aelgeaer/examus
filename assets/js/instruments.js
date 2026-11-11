@@ -3,7 +3,9 @@
 // Semua butir ditulis untuk Examus, kecuali Suasana Hati yang memakai isi PHQ-9 (bebas dipakai tanpa izin)
 // dalam bahasa remaja. Tidak ada yang sudah divalidasi secara psikometrik untuk versi bahasa Indonesia ini.
 import { esc } from "./util.js";
-import { RIASEC, MINAT_ITEMS } from "./data.js";
+import { RIASEC, MINAT_ITEMS, GAYA_ITEMS, VAK } from "./data.js";
+import { radar } from "./charts.js";
+import { gayaProfile, donut, VAK_COLOR } from "./gaya.js";
 
 const HELP = `<div class="gb-tips"><h2>Kalau butuh teman bicara</h2><ul><li>Ceritakan kepada guru BK, wali kelas, atau orang dewasa yang kamu percaya.</li><li>Kalau kamu atau temanmu dalam bahaya, segera minta tolong orang dewasa terdekat atau telepon 112.</li></ul></div>`;
 const thanks = (name, body = "") => `<p class="gb-eyebrow">Terima kasih, ${esc(name)}</p><h1>Jawabanmu sudah tersimpan.</h1><p class="lead" style="margin-top:.5rem">Hanya gurumu yang bisa melihat jawabanmu.</p>${body}`;
@@ -18,13 +20,28 @@ export const RIASEC_EX = {
   C: { mapel: "Matematika, Informatika, Ekonomi", jurusan: "Akuntansi, Administrasi, Statistika", kerja: "akuntan, staf administrasi, analis data, pustakawan" },
 };
 const MINAT5 = [{ v: 4, t: "Sangat suka" }, { v: 3, t: "Suka" }, { v: 2, t: "Ragu-ragu" }, { v: 1, t: "Tidak suka" }, { v: 0, t: "Sangat tidak suka" }];
-// Skor tiap bidang dalam persen dari nilai tertinggi; sesi lama memakai skala 0-2.
+export const RIASEC_KEYS = ["R", "I", "A", "S", "E", "C"];
+export const RIASEC_LABEL = { R: "Realistik", I: "Investigatif", A: "Artistik", S: "Sosial", E: "Wirausaha", C: "Konvensional" };
+// Penilaian ala Holland: skor mentah tiap tipe = jumlah nilai kegiatan tipe itu (8 kegiatan x 0-4 = 0-32).
+// Kode = tiga tipe dengan skor tertinggi. Diferensiasi = skor tertinggi dikurangi terendah; bila kurang
+// dari 25% rentang (8 poin), minat "belum terbedakan". Bila skor tertinggi di bawah 50% (16 poin, rata-rata
+// "ragu-ragu"), minat "rendah". Keduanya tidak diberi kode. Selisih 4 poin atau kurang di antara dua tipe
+// masih dalam batas kesalahan ukur, jadi urutannya dianggap setara. Sesi lama memakai skala 0-2.
 export function minatProfile(answers, cfg = {}) {
-  const max = cfg.scale === 5 ? 4 : 2, sum = {}, n = {};
-  MINAT_ITEMS.forEach((it, i) => { if (answers?.[i] === undefined) return; sum[it.k] = (sum[it.k] || 0) + Number(answers[i]); n[it.k] = (n[it.k] || 0) + 1; });
-  const pct = Object.fromEntries(Object.keys(RIASEC).map((k) => [k, n[k] ? Math.round((sum[k] / (max * n[k])) * 100) : 0]));
-  const order = Object.keys(RIASEC).sort((a, b) => pct[b] - pct[a]);
-  return { pct, order, code: order.slice(0, 3).join(""), top: order[0], flat: pct[order[0]] - pct[order[5]] < 15 };
+  const max = cfg.scale === 5 ? 4 : 2, raw = {}, n = {};
+  RIASEC_KEYS.forEach((k) => { raw[k] = 0; n[k] = 0; });
+  MINAT_ITEMS.forEach((it, i) => { if (answers?.[i] === undefined || answers[i] === null) return; raw[it.k] += Number(answers[i]) || 0; n[it.k]++; });
+  const range = Object.fromEntries(RIASEC_KEYS.map((k) => [k, max * n[k]]));
+  const pct = Object.fromEntries(RIASEC_KEYS.map((k) => [k, range[k] ? Math.round((raw[k] / range[k]) * 100) : 0]));
+  const order = [...RIASEC_KEYS].sort((a, b) => pct[b] - pct[a] || RIASEC_KEYS.indexOf(a) - RIASEC_KEYS.indexOf(b));
+  const diff = pct[order[0]] - pct[order[5]];
+  const flat = diff < 25, low = pct[order[0]] < 50;
+  const vals = answers ? MINAT_ITEMS.map((_, i) => answers[i]).filter((v) => v !== undefined) : [];
+  const same = vals.length > 10 && vals.every((v) => v === vals[0]);
+  const code = flat || low ? "" : order.slice(0, 3).join("");
+  const tied = !code ? [] : [0, 1, 2].filter((i) => pct[order[i]] - pct[order[i + 1]] <= 12.5).map((i) => order[i] + order[i + 1]);
+  const note = same ? "jawaban semuanya sama" : low ? "minat rendah" : flat ? "minat belum terbedakan" : "";
+  return { raw, pct, order, code, top: code ? order[0] : null, flat, low, same, diff, tied, note, max: range };
 }
 
 /* ---------------- Kekuatan & kesulitan ---------------- */
@@ -47,9 +64,17 @@ export function kkProfile(a) {
   KK_ITEMS.forEach((it, i) => (s[it.k] += Number(a?.[i]) || 0));
   return { s, total: s.emosi + s.perilaku + s.fokus + s.teman, impact: Number(a?.impact) || 0, bullied: Number(a?.[KK_BULLIED]) >= 1 };
 }
-// Batas kasar buatan Examus (bukan norma): tiap area 0-10, total kesulitan 0-40.
-export const kkBand = (score, area) => (area === "peduli" ? (score <= 4 ? "rendah" : "baik") : score >= 7 ? "tinggi" : score >= 5 ? "agak tinggi" : "wajar");
-export const kkTotalBand = (t) => (t >= 20 ? "tinggi" : t >= 16 ? "agak tinggi" : "wajar");
+// Empat pita mengikuti cara pembagian SDQ versi laporan diri usia 11-17 (sekitar 80% wajar, 10% sedikit
+// meningkat, 5% tinggi, 5% sangat tinggi pada sampel normatif Inggris). Butir Examus bukan butir SDQ,
+// jadi batas ini hanya patokan sementara sampai ada norma lokal. Tiap area 0-10, total kesulitan 0-40.
+const KK_CUT = { emosi: [5, 6, 7], perilaku: [4, 5, 6], fokus: [6, 7, 8], teman: [3, 4, 5] };
+export const KK_LEVELS = ["Wajar", "Sedikit meningkat", "Tinggi", "Sangat tinggi"];
+export const kkLevel = (score, area) => {
+  if (area === "peduli") return score >= 6 ? 0 : score === 5 ? 1 : score === 4 ? 2 : 3;
+  const c = KK_CUT[area]; return score >= c[2] ? 3 : score >= c[1] ? 2 : score >= c[0] ? 1 : 0;
+};
+export const kkTotalLevel = (t) => (t >= 20 ? 3 : t >= 18 ? 2 : t >= 15 ? 1 : 0);
+export const kkLevelName = (lvl, area) => (area === "peduli" ? ["Wajar", "Sedikit rendah", "Rendah", "Sangat rendah"][lvl] : KK_LEVELS[lvl]);
 const KK_TIPS = {
   emosi: "Kalau rasa khawatir atau sedih datang, coba tarik napas pelan-pelan dan ceritakan kepada orang yang kamu percaya.",
   perilaku: "Saat mulai marah, coba diam dan hitung sampai sepuluh sebelum bicara atau bertindak.",
@@ -77,13 +102,15 @@ export const PHQ_ITEMS = [
   "bergerak atau berbicara sangat lambat sampai orang lain memperhatikan, atau justru sangat gelisah sampai sulit diam",
   "berpikir lebih baik mati, atau ingin menyakiti dirimu sendiri",
 ];
-export const PHQ_OPTS = [{ v: 0, t: "Tidak pernah" }, { v: 1, t: "Beberapa hari" }, { v: 2, t: "Lebih dari seminggu" }, { v: 3, t: "Hampir setiap hari" }];
+export const PHQ_OPTS = [{ v: 0, t: "Tidak pernah" }, { v: 1, t: "Beberapa hari" }, { v: 2, t: "Lebih dari separuh hari" }, { v: 3, t: "Hampir setiap hari" }];
+export const PHQ_IMPACT = [{ v: 0, t: "Tidak sulit sama sekali" }, { v: 1, t: "Agak sulit" }, { v: 2, t: "Sangat sulit" }, { v: 3, t: "Amat sangat sulit" }];
 export const phqItems = (cfg) => (cfg.variant === "phq8" ? PHQ_ITEMS.slice(0, 8) : PHQ_ITEMS);
 export function phqProfile(a, cfg) {
   const n = phqItems(cfg).length;
   let total = 0; for (let i = 0; i < n; i++) total += Number(a?.[i]) || 0;
   const item9 = n === 9 ? Number(a?.[8]) || 0 : 0;
-  const band = total >= 20 ? "Berat" : total >= 15 ? "Cukup berat" : total >= 10 ? "Sedang" : total >= 5 ? "Ringan" : "Minimal";
+  // Pita keparahan standar PHQ-9 (Kroenke dkk., 2001): 0-4, 5-9, 10-14, 15-19, 20-27. Skor 10 ke atas = perlu evaluasi lanjut.
+  const band = total >= 20 ? "Berat" : total >= 15 ? "Sedang-berat" : total >= 10 ? "Sedang" : total >= 5 ? "Ringan" : "Minimal";
   const priority = item9 >= 1 || total >= 20 ? "hari ini" : total >= 15 ? "minggu ini" : total >= 10 ? "pantau" : "";
   return { total, item9, band, priority, impact: Number(a?.impact) || 0 };
 }
@@ -187,35 +214,65 @@ export const PR_ITEMS = [
   pr("korban", "Gosip buruk tentang aku disebarkan.", { form: "Gosip" }), pr("pelaku", "Aku menyebarkan gosip tentang teman."), pr("saksi", "Aku menghibur teman yang baru saja diganggu.", { pos: true }), pr("iklim", "Aku merasa diterima di sekolah ini.", { pos: true }),
 ];
 export const PR_OPTS = [{ v: 0, t: "Tidak pernah" }, { v: 1, t: "Jarang" }, { v: 2, t: "Kadang-kadang" }, { v: 3, t: "Sering" }, { v: 4, t: "Sangat sering" }];
+// Klasifikasi mengikuti batas Solberg & Olweus (2003): murid dianggap mengalami atau melakukan perundungan
+// bila setidaknya satu bentuk terjadi "kadang-kadang" atau lebih (setara 2-3 kali sebulan). "Jarang" = pantau.
+// Kekerasan fisik atau ancaman pada tingkat itu didahulukan.
 export function prProfile(a) {
   const val = (i) => Number(a?.[i]) || 0;
-  const mean = (k, f = () => true) => { const ids = PR_ITEMS.map((it, i) => [it, i]).filter(([it]) => it.k === k && f(it)); return ids.reduce((t, [, i]) => t + val(i), 0) / ids.length; };
-  const seriousV = PR_ITEMS.some((it, i) => it.k === "korban" && it.serious && val(i) >= 2);
-  const anyV3 = PR_ITEMS.some((it, i) => it.k === "korban" && val(i) >= 3);
-  const korban = mean("korban"), pelaku = mean("pelaku"), safe = mean("iklim");
-  const forms = PR_ITEMS.map((it, i) => [it, i]).filter(([it, i]) => it.k === "korban" && val(i) >= 2).map(([it]) => it.form);
+  const idx = (k, f = () => true) => PR_ITEMS.map((it, i) => [it, i]).filter(([it]) => it.k === k && f(it)).map(([, i]) => i);
+  const mean = (ids) => ids.reduce((t, i) => t + val(i), 0) / ids.length;
+  const maxOf = (ids) => Math.max(0, ...ids.map(val));
+  const V = idx("korban"), D = idx("pelaku");
+  const seriousV = idx("korban", (it) => it.serious).some((i) => val(i) >= 2);
+  const forms = V.filter((i) => val(i) >= 2).map((i) => PR_ITEMS[i].form);
+  const lvl = (ids, serious) => (serious ? "didahulukan" : maxOf(ids) >= 2 ? "perlu" : maxOf(ids) >= 1 ? "pantau" : "");
+  const victim = lvl(V, seriousV), doer = lvl(D, idx("pelaku", (it) => it.serious).some((i) => val(i) >= 2));
   return {
-    korban, pelaku, safe, forms,
-    victim: seriousV ? "didahulukan" : anyV3 || korban >= 1.5 ? "perlu" : korban >= 0.75 ? "pantau" : "",
-    doer: PR_ITEMS.some((it, i) => it.k === "pelaku" && it.serious && val(i) >= 2) || pelaku >= 1.5 ? "perlu" : pelaku >= 0.75 ? "pantau" : "",
-    defender: mean("saksi", (it) => it.pos) >= 2,
+    korban: mean(V), pelaku: mean(D), safe: mean(idx("iklim")), forms,
+    victim, doer: doer === "didahulukan" ? "perlu" : doer,
+    both: ["didahulukan", "perlu"].includes(victim) && maxOf(D) >= 2,
+    defender: mean(idx("saksi", (it) => it.pos)) >= 2,
     seriousV,
   };
 }
 
 /* ---------------- Definisi untuk alur murid ---------------- */
 export const INSTR = {
+  "gaya-belajar": {
+    heading: "Kenali cara belajarmu",
+    letters: true,
+    intro: () => [["Kamu paling mudah belajar lewat apa?", `Ada ${GAYA_ITEMS.length} situasi sehari-hari. Pilih satu jawaban yang paling mirip denganmu.`], ["Tidak ada jawaban yang salah", "Jawab seperti kamu biasanya. Cuma sekitar 5 menit."], ["Hasilnya langsung untukmu", "Di akhir, kamu melihat cara belajar yang paling cocok untukmu."]],
+    items: () => GAYA_ITEMS.map((it, i) => ({ text: it.text, options: it.options.map((_, j, arr) => arr[(j + i) % 3]).map((o) => ({ v: o.k, t: o.t })) })),
+    ask: "Pilih yang paling mirip denganmu.",
+    result(a) {
+      const r = gayaProfile(a);
+      return `<p class="gb-eyebrow">Hasil gaya belajarmu</p>${donut(r.c, "Perbandingan gaya belajarmu")}
+        <h1>${esc(r.title)}</h1><p class="lead">${esc(r.desc)}</p>
+        <div class="gb-stack" aria-hidden="true">${r.order.filter((k) => r.c[k] > 0).map((k) => `<i style="flex:${r.c[k]};background:${VAK_COLOR[k]}"></i>`).join("")}</div>
+        <div class="gb-legend">${["V", "A", "K"].map((k) => `<span><span class="dot" style="background:${VAK_COLOR[k]}"></span>${VAK[k]} <b>${r.pct[k]}%</b></span>`).join("")}</div>
+        <div class="gb-tips"><h2>Coba cara ini saat belajar</h2><ul>${r.tips.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>`;
+    },
+  },
   "minat-karier": {
     heading: "Kenali minat kariermu",
     intro: () => [["Kegiatan apa yang kamu suka?", `Ada ${MINAT_ITEMS.length} kegiatan. Untuk tiap kegiatan, pilih seberapa suka kamu melakukannya.`], ["Bukan soal bisa atau tidak", "Pilih karena kamu suka, bukan karena kamu sudah pandai. Tidak ada jawaban yang salah."], ["Hasilnya langsung untukmu", "Di akhir, kamu melihat kode minatmu beserta contoh mapel, jurusan, dan pekerjaan."]],
     items: () => MINAT_ITEMS.map((it) => ({ text: it.text })),
-    ask: "Seberapa suka kamu dengan kegiatan ini?",
+    stem: "Seberapa suka kamu…",
     options: () => MINAT5,
     result(a, cfg, name) {
       const p = minatProfile(a, cfg);
-      return `<p class="gb-eyebrow">Hasil minat kariermu</p><h1>${p.code}</h1><p class="lead">Minat terkuatmu: ${p.order.slice(0, 3).map((k) => RIASEC[k].name.toLowerCase()).join(", ")}.</p>
-        ${p.order.slice(0, 3).map((k) => `<div class="gb-tips"><h2>${RIASEC[k].name} (${k})</h2><p class="muted" style="margin-top:.3rem">${esc(RIASEC[k].hint)}</p><ul><li>Mapel: ${RIASEC_EX[k].mapel}</li><li>Jurusan: ${RIASEC_EX[k].jurusan}</li><li>Pekerjaan: ${RIASEC_EX[k].kerja}</li></ul></div>`).join("")}
-        <p class="muted" style="margin-top:1rem">Minat bisa berubah seiring waktu. Bicarakan hasil ini dengan guru BK atau orang tuamu, ${esc(name)}.</p>`;
+      const vals = Object.fromEntries(RIASEC_KEYS.map((k) => [k, p.pct[k] / 100]));
+      const think = `<div class="gb-tips"><h2>Coba pikirkan</h2><ul><li>Dari semua kegiatan tadi, mana yang paling ingin kamu coba sungguhan?</li><li>Siapa orang di sekitarmu yang pekerjaannya cocok dengan minatmu? Coba tanyakan pengalamannya.</li><li>Mapel pilihan atau jurusan apa yang ingin kamu cari tahu lebih jauh?</li></ul></div>`;
+      const head = p.code
+        ? `<h1 class="center">${p.code}</h1><p class="lead center">Minat terkuatmu: ${p.order.slice(0, 3).map((k) => RIASEC_LABEL[k].toLowerCase()).join(", ")}.</p>
+           ${p.order.slice(0, 3).map((k) => `<div class="gb-tips"><h2>${RIASEC_LABEL[k]} (${k})</h2><p class="muted" style="margin-top:.3rem">${esc(RIASEC[k].hint)}</p><ul><li>Mapel: ${RIASEC_EX[k].mapel}</li><li>Jurusan: ${RIASEC_EX[k].jurusan}</li><li>Pekerjaan: ${RIASEC_EX[k].kerja}</li></ul></div>`).join("")}`
+        : p.low
+          ? `<h1 class="center">Minatmu belum terlihat jelas</h1><p class="lead center">Belum banyak kegiatan yang kamu sukai di daftar tadi. Itu wajar, mungkin kamu belum sempat mencobanya. Cobalah kegiatan baru di sekolah atau di rumah, nanti minatmu akan lebih terlihat.</p>`
+          : `<h1 class="center">Minatmu luas</h1><p class="lead center">Kamu menyukai banyak jenis kegiatan hampir sama besarnya, jadi belum ada satu yang paling menonjol. Itu wajar di usiamu. Cobalah banyak hal, nanti minat yang paling kuat akan terlihat.</p>`;
+      return `<p class="gb-eyebrow">Hasil minat kariermu</p>
+        <div class="radar-wrap">${radar(vals, RIASEC_KEYS, RIASEC_LABEL, { bold: p.code ? p.order.slice(0, 3) : [] })}</div>
+        ${head}${think}
+        <div class="caveat" style="margin-top:1rem">Ini gambaran minatmu saat ini, bukan ukuran kemampuan dan bukan keputusan akhir. Minat bisa berubah seiring pengalaman, dan semua pekerjaan bisa dijalani laki-laki maupun perempuan. Ceritakan hasil ini kepada orang tua dan gurumu, lalu coba kegiatan yang berkaitan, ${esc(name)}!</div>`;
     },
   },
   kekuatan: {
@@ -240,7 +297,7 @@ export const INSTR = {
     items: (cfg) => phqItems(cfg).map((t) => ({ text: t })),
     stem: "Selama dua minggu terakhir, seberapa sering kamu…",
     options: () => PHQ_OPTS,
-    extra: () => [{ key: "impact", text: "Kalau kamu mengalami hal-hal tadi, seberapa sulit hal itu membuatmu belajar, mengurus urusan di rumah, atau bergaul dengan teman?", options: [{ v: 0, t: "Tidak sulit" }, { v: 1, t: "Agak sulit" }, { v: 2, t: "Sulit" }, { v: 3, t: "Sangat sulit" }] }],
+    extra: () => [{ key: "impact", text: "Kalau kamu mengalami hal-hal tadi, seberapa sulit hal itu membuatmu belajar, mengurus urusan di rumah, atau bergaul dengan teman?", options: PHQ_IMPACT }],
     result(a, cfg, name) {
       const p = phqProfile(a, cfg);
       const urgent = p.priority === "hari ini" || p.priority === "minggu ini";

@@ -1,9 +1,10 @@
 // Laporan guru untuk asesmen skala: minat karier, kekuatan & kesulitan, suasana hati,
 // tipe kepribadian, AKPD, dan deteksi perundungan.
-import { esc } from "./util.js";
+import { esc, $, $$ } from "./util.js";
+import { radar } from "./charts.js";
 import { RIASEC, MINAT_ITEMS } from "./data.js";
 import {
-  RIASEC_EX, minatProfile, KK_AREAS, KK_ITEMS, kkProfile, kkBand, kkTotalBand, PHQ_ITEMS, phqItems, phqProfile,
+  RIASEC_EX, RIASEC_KEYS, RIASEC_LABEL, minatProfile, KK_AREAS, KK_ITEMS, kkProfile, kkLevel, kkTotalLevel, kkLevelName, PHQ_ITEMS, PHQ_IMPACT, phqItems, phqProfile,
   TK_DIMS, TK_LETTER, tkProfile, AKPD_BIDANG, akpdItems, akpdProfile, PR_ASPEK, PR_ITEMS, prProfile,
 } from "./instruments.js";
 
@@ -19,69 +20,120 @@ const join = (s, res, prof) => { const by = new Map(res.map((r) => [r.no, r.answ
 
 /* ---------------- Minat karier ---------------- */
 export function minatReport(s, res) {
-  const KEYS = Object.keys(RIASEC), cfg = s.config || {};
+  const cfg = s.config || {}, K = RIASEC_KEYS, newScale = cfg.scale === 5;
   const rows = join(s, res, (a) => minatProfile(a, cfg)), done = rows.filter((r) => r.filled);
-  const avg = Object.fromEntries(KEYS.map((k) => [k, done.length ? Math.round(done.reduce((t, r) => t + r.p.pct[k], 0) / done.length) : 0]));
-  const order = [...KEYS].sort((a, b) => avg[b] - avg[a]);
-  const by = Object.fromEntries(KEYS.map((k) => [k, done.filter((r) => r.p.top === k)]));
-  const flat = done.filter((r) => r.p.flat);
+  const avgPct = Object.fromEntries(K.map((k) => [k, done.length ? done.reduce((t, r) => t + r.p.pct[k], 0) / done.length : 0]));
+  const avgRaw = Object.fromEntries(K.map((k) => [k, done.length ? done.reduce((t, r) => t + r.p.raw[k], 0) / done.length : 0]));
+  const order = [...K].sort((a, b) => avgPct[b] - avgPct[a]);
+  const coded = done.filter((r) => r.p.code), talk = done.filter((r) => r.p.note);
+  const by = Object.fromEntries(K.map((k) => [k, coded.filter((r) => r.p.top === k)]));
+  const fmt = (x) => (Math.round(x * 10) / 10).toString().replace(".", ",");
+  const maxRaw = newScale ? 32 : 6;
+  const nameBtn = (r, note) => `<button type="button" class="linkname" data-no="${r.no}">${esc(r.name)}</button>${note ? `<span class="muted small">${esc(note)}</span>` : ""}`;
   const body = `
-    <div class="gsum1 card"><h2>Kelas ini paling berminat pada bidang ${RIASEC[order[0]].name.toLowerCase()} dan ${RIASEC[order[1]].name.toLowerCase()}.</h2>
-      <p class="muted" style="margin-top:.4rem">Rata-rata skor minat kelas per bidang (persen dari skor tertinggi).</p>
-      <div style="margin-top:.9rem">${bars(order.map((k) => [`${RIASEC[k].name} (${k})`, avg[k]]))}</div></div>
-    <h2 class="sec-h">Murid yang perlu diajak bicara</h2>
-    <div class="sumcards">${prio("Minat belum jelas", "warn", flat.map((r) => ({ name: r.name, note: r.p.code })), "Skor semua bidang hampir sama. Biasanya mereka belum banyak mengenal pilihan; ajak mengikuti kegiatan eksplorasi karier.")}
-      ${prio("Minat sangat menonjol", "ok", done.filter((r) => r.p.pct[r.p.top] >= 85).map((r) => ({ name: r.name, note: RIASEC[r.p.top].name })), "Dukung dengan informasi jurusan dan kegiatan yang sesuai.")}</div>
+    <div class="mkw"><div class="gsum1 card"><p class="eyebrow" style="margin-top:0">Rata-rata minat kelas</p>
+      <h2>Kelas ini paling berminat pada bidang ${order.slice(0, 3).map((k) => RIASEC_LABEL[k]).join(", ")}.</h2>
+      <p style="margin-top:.4rem">Minat utama murid biasanya beragam di dalam satu kelas. Lihat sebaran minat utama dan kartu tiap murid di bawah; rata-rata kelas hanya membantu merancang bimbingan klasikal.</p>
+      <div class="radar2"><div>${radar(Object.fromEntries(K.map((k) => [k, avgPct[k] / 100])), K, RIASEC_LABEL, { bold: order.slice(0, 3), size: 240 })}</div>
+      <div class="rbars">${K.map((k) => `<div class="b"><b>${k}</b><span class="nm">${RIASEC_LABEL[k]}</span><span class="track"><i style="width:${avgPct[k]}%"></i></span><span class="val">${fmt(avgRaw[k])}</span></div>`).join("")}
+      <p class="muted small" style="margin-top:.4rem">Angka = rata-rata skor mentah kelas (0-${maxRaw}).</p></div></div></div>
+
+    <h2 class="sec-h">Perlu diajak bicara (${talk.length})</h2>
+    <p class="muted">Ajak bicara secara pribadi, tanpa menghakimi. Minat rendah bisa berarti belum punya pengalaman, belum mengenal pilihan, kurang serius mengisi, atau sedang ada masalah (suasana hati, keluarga, sekolah). Minat yang belum terbedakan wajar di SMP: tawarkan pengalaman baru dan ulangi angket 6 sampai 12 bulan lagi.</p>
+    ${talk.length ? `<ul class="talk">${talk.map((r) => `<li>${nameBtn(r, r.p.note)}</li>`).join("")}</ul>` : `<div class="card" style="margin-top:.6rem"><p class="muted">Tidak ada.</p></div>`}
+
     <h2 class="sec-h">Murid per minat utama</h2>
-    <div class="ggroups g3">${KEYS.map((k) => `<div class="card"><p class="gh">${RIASEC[k].name} (${k}) <span class="muted">${by[k].length}</span></p>${by[k].length ? `<ul>${by[k].map((r) => `<li><span>${esc(r.name)}</span><span class="muted small">${r.p.code}</span></li>`).join("")}</ul>` : `<p class="muted">-</p>`}</div>`).join("")}</div>
+    <p class="muted">Dikelompokkan menurut huruf pertama kode. Ketuk nama untuk melihat kartu murid.</p>
+    <div class="ggroups g3" style="margin-top:.8rem">${K.filter((k) => by[k].length).map((k) => `<div class="card"><p class="gh">${RIASEC_LABEL[k]} (${k}) <span class="muted">${by[k].length}</span></p><ul>${by[k].map((r) => `<li>${nameBtn(r, r.p.code)}</li>`).join("")}</ul></div>`).join("")}
+      ${talk.length ? `<div class="card"><p class="gh">Belum terbedakan atau rendah <span class="muted">${talk.length}</span></p><ul>${talk.map((r) => `<li>${nameBtn(r)}</li>`).join("")}</ul></div>` : ""}
+      ${!done.length ? `<div class="card"><p class="muted">Belum ada yang mengisi.</p></div>` : ""}</div>
+
     <h2 class="sec-h">Arti enam bidang</h2>
-    ${tbl(["Bidang", { t: "Ciri", wrap: 1 }, { t: "Contoh mapel", wrap: 1 }, { t: "Contoh jurusan", wrap: 1 }, { t: "Contoh pekerjaan", wrap: 1 }], KEYS.map((k) => [`${RIASEC[k].name} (${k})`, RIASEC[k].hint, RIASEC_EX[k].mapel, RIASEC_EX[k].jurusan, RIASEC_EX[k].kerja]))}
+    ${tbl(["Bidang", { t: "Ciri", wrap: 1 }, { t: "Contoh mapel", wrap: 1 }, { t: "Contoh jurusan", wrap: 1 }, { t: "Contoh pekerjaan", wrap: 1 }], K.map((k) => [`${RIASEC_LABEL[k]} (${k})`, RIASEC[k].hint, RIASEC_EX[k].mapel, RIASEC_EX[k].jurusan, RIASEC_EX[k].kerja]))}
+
     <h2 class="sec-h">Skor per murid</h2>
-    ${tbl(["No", "Nama", ...KEYS.map((k) => ({ t: k, num: 1 })), "Kode"], rows.map((r) => (r.filled ? [r.no, r.name, ...KEYS.map((k) => r.p.pct[k]), r.p.code] : [r.no, r.name, ...KEYS.map(() => "-"), "Belum mengisi"])))}
-    <p class="muted small" style="margin-top:.5rem">Skor = persen dari nilai tertinggi untuk tiap bidang (${MINAT_ITEMS.length / 6} kegiatan per bidang). Kode minat = tiga bidang dengan skor tertinggi.</p>
+    ${tbl(["No", "Nama", "L/P", ...K.map((k) => ({ t: k, num: 1 })), "Kode", "Catatan"], rows.map((r) => (r.filled
+      ? [r.no, { html: nameBtn(r) }, r.g || "-", ...K.map((k) => r.p.raw[k]), r.p.code || "—", [r.p.note, r.p.tied.length ? `urutan ${r.p.tied.join(", ")} setara` : ""].filter(Boolean).join("; ") || "-"]
+      : [r.no, r.name, r.g || "-", ...K.map(() => "-"), "-", "Belum mengisi"])))}
+    <p class="muted small" style="margin-top:.5rem">${newScale
+      ? "Skor tiap tipe = jumlah nilai 8 kegiatan (sangat tidak suka 0 sampai sangat suka 4), jadi 0-32."
+      : "Sesi lama: skor tiap tipe = jumlah nilai 3 kegiatan (tidak tertarik 0 sampai tertarik 2), jadi 0-6."}
+      Kode = tiga tipe dengan skor tertinggi; selisih 4 poin (12,5%) atau kurang masih dalam batas kesalahan ukur, jadi urutannya dianggap setara.
+      "Belum terbedakan": skor tertinggi dan terendah selisih kurang dari 25% rentang. "Minat rendah": skor tertinggi di bawah 50% rentang, artinya tidak ada bidang yang rata-rata dinilai "ragu-ragu" atau lebih. Keduanya tidak diberi kode.</p>
     ${unfilled(rows)}
-    ${tips("Saran tindak lanjut", [
-      `Undang narasumber atau alumni dari bidang ${RIASEC[order[0]].name.toLowerCase()}, minat terbanyak di kelas ini.`,
-      "Pakai kode minat sebagai pembuka percakapan: tanyakan kegiatan apa yang membuat murid memilih jawabannya.",
-      "Hubungkan dengan pilihan mapel atau jurusan, tetapi jangan menjadikannya satu-satunya dasar keputusan.",
-      "Minat masih berubah di usia sekolah. Ulangi setahun sekali dan bandingkan hasilnya bersama murid.",
-    ])}`;
-  return { body, csv: () => [["No", "Nama", "L/P", ...KEYS.map((k) => RIASEC[k].name + " (%)"), "Kode"], ...rows.map((r) => (r.filled ? [r.no, r.name, r.g, ...KEYS.map((k) => r.p.pct[k]), r.p.code] : [r.no, r.name, r.g, ...KEYS.map(() => ""), "Belum mengisi"]))] };
+    ${tips("Tindak lanjut untuk kelas ini", [
+      `Adakan bimbingan klasikal tentang enam tipe minat, lalu minta tiap murid mencari tahu satu pekerjaan dari kodenya.`,
+      `Undang alumni atau orang tua dengan pekerjaan yang beragam, terutama dari bidang ${RIASEC_LABEL[order[0]].toLowerCase()} dan ${RIASEC_LABEL[order[1]].toLowerCase()}.`,
+      "Temui murid di daftar \"perlu diajak bicara\" satu per satu; tawarkan kegiatan eksplorasi seperti ekstrakurikuler, kunjungan, atau proyek kecil.",
+      "Pakai hasil ini sebagai bahan percakapan saat memilih mapel pilihan, jurusan SMK, atau jurusan kuliah, bersama nilai rapor dan keinginan murid.",
+      "Ulangi angket 6 sampai 12 bulan lagi dan bandingkan hasilnya bersama murid.",
+    ])}
+    ${caveat("Hasil ini menunjukkan minat, bukan bakat atau kemampuan, dan bukan keputusan akhir. Minat remaja masih berkembang; untuk murid SMP cukup perhatikan satu atau dua huruf pertama dan pakai untuk eksplorasi. Gunakan sebagai bahan percakapan bersama murid dan orang tua, berdampingan dengan prestasi belajar, bakat, nilai-nilai keluarga, dan kesempatan yang ada. Semua pekerjaan bisa dijalani laki-laki maupun perempuan. Angket ini disusun Examus berdasarkan teori Holland dan belum dinormakan pada murid Indonesia, jadi skornya dibaca relatif terhadap diri murid sendiri.")}
+    <p class="no-print" style="margin-top:1rem"><a class="btn" href="#/mulai/gaya-belajar${s.classId ? "?kelas=" + s.classId : ""}">Kenali cara belajar kelas ini → Gaya Belajar</a></p>
+    <dialog class="sheet" id="mk-card"></dialog></div>`;
+  return {
+    body,
+    csv: () => [["No", "Nama", "L/P", ...K.map((k) => RIASEC_LABEL[k]), "Kode", "Catatan"], ...rows.map((r) => (r.filled ? [r.no, r.name, r.g, ...K.map((k) => r.p.raw[k]), r.p.code, r.p.note] : [r.no, r.name, r.g, ...K.map(() => ""), "", "Belum mengisi"]))],
+    mount(root) {
+      const dlg = $("#mk-card", root);
+      $(".mkw", root).addEventListener("click", (e) => {
+        const b = e.target.closest(".linkname"); if (!b) return;
+        const r = rows.find((x) => x.no === Number(b.dataset.no)); if (!r?.filled) return;
+        const p = r.p;
+        dlg.innerHTML = `<p class="eyebrow" style="margin-top:0">${r.no}. ${esc(r.name)}</p>
+          <div class="mkhead"><div>${radar(Object.fromEntries(K.map((k) => [k, p.pct[k] / 100])), K, RIASEC_LABEL, { avg: Object.fromEntries(K.map((k) => [k, avgPct[k] / 100])), size: 150, bold: p.code ? p.order.slice(0, 3) : [] })}</div>
+          <div><h2>${p.code || (p.low ? "Minat rendah" : "Belum terbedakan")}</h2><p class="muted small">Garis putus-putus: rata-rata kelas.</p></div></div>
+          ${p.note ? `<p class="notice">Perlu diajak bicara: ${esc(p.note)}.</p>` : ""}
+          ${p.code ? `<ul class="tips" style="margin-top:.8rem">${p.order.slice(0, 3).map((k) => `<li><b style="font-weight:500">${RIASEC_LABEL[k]} (${p.raw[k]}).</b> Mapel: ${RIASEC_EX[k].mapel}. Jurusan: ${RIASEC_EX[k].jurusan}.</li>`).join("")}</ul>` : ""}
+          <button class="btn block" style="margin-top:1rem" data-close>Tutup</button>`;
+        dlg.querySelector("[data-close]").onclick = () => dlg.close();
+        dlg.showModal ? dlg.showModal() : dlg.setAttribute("open", "");
+      });
+      dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });
+    },
+  };
 }
 
 /* ---------------- Kekuatan & kesulitan ---------------- */
 export function kekuatanReport(s, res) {
-  const rows = join(s, res, kkProfile), done = rows.filter((r) => r.filled), DIFF = ["emosi", "perilaku", "fokus", "teman"];
-  const share = (k) => pct(done.filter((r) => ["tinggi", "agak tinggi"].includes(kkBand(r.p.s[k], k))).length, done.length);
-  const high = done.filter((r) => kkTotalBand(r.p.total) === "tinggi" || r.p.impact >= 2).sort((a, b) => b.p.total - a.p.total);
+  const rows = join(s, res, kkProfile), done = rows.filter((r) => r.filled), DIFF = ["emosi", "perilaku", "fokus", "teman"], ALL = Object.keys(KK_AREAS);
+  const lvlCount = (k, l) => done.filter((r) => (k === "total" ? kkTotalLevel(r.p.total) : kkLevel(r.p.s[k], k)) === l).length;
+  const high = done.filter((r) => kkTotalLevel(r.p.total) >= 2 || r.p.impact >= 2).sort((a, b) => b.p.total - a.p.total);
+  const watch = done.filter((r) => !high.includes(r) && (kkTotalLevel(r.p.total) === 1 || DIFF.some((k) => kkLevel(r.p.s[k], k) >= 2)));
   const bullied = done.filter((r) => r.p.bullied);
-  const groups = Object.fromEntries(DIFF.map((k) => [k, done.filter((r) => kkBand(r.p.s[k], k) === "tinggi")]));
-  const lowCare = done.filter((r) => kkBand(r.p.s.peduli, "peduli") === "rendah");
+  const groups = Object.fromEntries(DIFF.map((k) => [k, done.filter((r) => kkLevel(r.p.s[k], k) >= 2)]));
+  const lowCare = done.filter((r) => kkLevel(r.p.s.peduli, "peduli") >= 2);
+  const cls = ["", "l1", "l2", "l3"];
+  const cell = (score, area) => { const l = area === "total" ? kkTotalLevel(score) : kkLevel(score, area); return { html: `<span class="lv ${cls[l]}">${score}</span>` }; };
   const body = `
-    <div class="gsum1 card"><h2>Gambaran kelas per area</h2><p class="muted" style="margin-top:.4rem">Persentase murid dengan skor agak tinggi atau tinggi di tiap area kesulitan.</p>
-      <div style="margin-top:.9rem">${bars(DIFF.map((k) => [KK_AREAS[k], share(k)]))}</div>
-      <p style="margin-top:.8rem">Kepedulian rendah: ${lowCare.length} murid.</p></div>
+    <h2 class="sec-h">Gambaran kelas per area</h2>
+    <div class="tblwrap"><table class="tbl lvl"><thead><tr><th>Area</th>${["Wajar", "Sedikit meningkat", "Tinggi", "Sangat tinggi"].map((x, i) => `<th class="num"><span class="lv ${cls[i]}">${x}</span></th>`).join("")}</tr></thead><tbody>
+      ${[...DIFF, "total"].map((k) => `<tr><td>${k === "total" ? "<b>Total kesulitan</b>" : KK_AREAS[k]}</td>${[0, 1, 2, 3].map((l) => `<td class="num">${lvlCount(k, l)}</td>`).join("")}</tr>`).join("")}
+      <tr><td>Kepedulian (kekuatan)</td>${[0, 1, 2, 3].map((l) => `<td class="num">${lvlCount("peduli", l)}</td>`).join("")}</tr></tbody></table></div>
+    <p class="muted small" style="margin-top:.4rem">Untuk kepedulian, kolom dibaca: wajar, sedikit rendah, rendah, sangat rendah.</p>
     <h2 class="sec-h">Siapa diajak bicara lebih dulu</h2>
-    <div class="sumcards">${prio("Kesulitan tinggi atau berdampak", "warn", high.map((r) => ({ name: r.name, note: `total ${r.p.total}` })), "Total kesulitan tinggi, atau murid merasa sangat terganggu.")}
+    <div class="sumcards">${prio("Tinggi atau berdampak", "warn", high.map((r) => ({ name: r.name, note: `total ${r.p.total}${r.p.impact >= 2 ? ", sangat terganggu" : ""}` })), "Total kesulitan tinggi (18+), atau murid merasa cukup atau sangat terganggu.")}
       ${prio("Sering diganggu teman", "warn", bullied.map((r) => ({ name: r.name })), "Menjawab agak benar atau benar pada kalimat tentang diejek atau diganggu.")}
-      ${prio("Kepedulian rendah", "", lowCare.map((r) => ({ name: r.name })), "Bisa dilibatkan dalam kegiatan menolong teman.")}</div>
+      ${prio("Pantau", "", watch.map((r) => ({ name: r.name, note: `total ${r.p.total}` })), "Total sedikit meningkat (15-17), atau satu area tinggi.")}</div>
     <h2 class="sec-h">Kelompok bimbingan</h2>
-    <div class="ggroups">${DIFF.map((k) => `<div class="card"><p class="gh">${KK_AREAS[k]} <span class="muted">${groups[k].length}</span></p>${groups[k].length ? `<ul>${groups[k].map((r) => `<li><span>${esc(r.name)}</span><span class="muted small">${r.p.s[k]}/10</span></li>`).join("")}</ul>` : `<p class="muted">-</p>`}</div>`).join("")}</div>
+    <p class="muted">Murid dengan area tinggi atau sangat tinggi.</p>
+    <div class="ggroups" style="margin-top:.8rem">${DIFF.map((k) => `<div class="card"><p class="gh">${KK_AREAS[k]} <span class="muted">${groups[k].length}</span></p>${groups[k].length ? `<ul>${groups[k].map((r) => `<li><span>${esc(r.name)}</span><span class="muted small">${r.p.s[k]}/10</span></li>`).join("")}</ul>` : `<p class="muted">-</p>`}</div>`).join("")}
+      <div class="card"><p class="gh">Kepedulian rendah <span class="muted">${lowCare.length}</span></p>${lowCare.length ? `<ul>${lowCare.map((r) => `<li><span>${esc(r.name)}</span><span class="muted small">${r.p.s.peduli}/10</span></li>`).join("")}</ul>` : `<p class="muted">-</p>`}</div></div>
     <h2 class="sec-h">Skor per murid</h2>
-    ${tbl(["No", "Nama", ...Object.values(KK_AREAS).map((t) => ({ t, num: 1 })), { t: "Total kesulitan", num: 1 }, "Dampak", "Catatan"], rows.map((r) => (r.filled
-      ? [r.no, r.name, ...Object.keys(KK_AREAS).map((k) => r.p.s[k]), r.p.total, ["Tidak", "Sedikit", "Cukup", "Sangat"][r.p.impact], [kkTotalBand(r.p.total) !== "wajar" ? `kesulitan ${kkTotalBand(r.p.total)}` : "", r.p.bullied ? "sering diganggu" : ""].filter(Boolean).join(", ") || "-"]
-      : [r.no, r.name, ...Object.keys(KK_AREAS).map(() => "-"), "-", "-", "Belum mengisi"])))}
-    <p class="muted small" style="margin-top:.5rem">Tiap area 0 sampai 10 (5 kalimat, nilai 0 sampai 2). Total kesulitan = emosi + perilaku + fokus + pertemanan (0 sampai 40). Batas "agak tinggi" (16) dan "tinggi" (20) adalah patokan kasar Examus, bukan norma baku; pakai untuk memilih siapa yang ditemui lebih dulu.</p>
+    ${tbl(["No", "Nama", ...Object.values(KK_AREAS).map((t) => ({ t, num: 1 })), { t: "Total", num: 1 }, "Dampak", "Catatan"], rows.map((r) => (r.filled
+      ? [r.no, r.name, ...ALL.map((k) => cell(r.p.s[k], k)), cell(r.p.total, "total"), ["Tidak", "Sedikit", "Cukup banyak", "Sangat banyak"][r.p.impact], [kkTotalLevel(r.p.total) ? `total ${kkLevelName(kkTotalLevel(r.p.total)).toLowerCase()}` : "", r.p.bullied ? "sering diganggu" : ""].filter(Boolean).join(", ") || "-"]
+      : [r.no, r.name, ...ALL.map(() => "-"), "-", "-", "Belum mengisi"])))}
+    <p class="muted small" style="margin-top:.5rem">Tiap area 0-10 (5 kalimat, tidak benar 0, agak benar 1, benar 2). Total kesulitan = emosi + perilaku + fokus + pertemanan (0-40). Warna mengikuti empat pita: wajar, sedikit meningkat, tinggi, sangat tinggi. Batasnya mengikuti pembagian SDQ laporan diri usia 11-17: total 15/18/20, emosi 5/6/7, perilaku 4/5/6, fokus 6/7/8, pertemanan 3/4/5, kepedulian 5/4/3 ke bawah.</p>
     ${unfilled(rows)}
     ${tips("Saran tindak lanjut", [
-      "Temui murid di kotak \"kesulitan tinggi\" secara pribadi minggu ini. Mulai dari kekuatannya, lalu tanyakan apa yang sedang berat.",
+      "Temui murid di kotak \"tinggi atau berdampak\" secara pribadi minggu ini. Mulai dari kekuatannya, lalu tanyakan apa yang sedang berat.",
       "Untuk murid yang sering diganggu, cocokkan dengan sosiometri atau deteksi perundungan dan amati saat istirahat.",
-      "Bentuk kelompok bimbingan kecil per area (misalnya mengelola emosi atau mengatur fokus belajar).",
+      "Bentuk kelompok bimbingan kecil per area, misalnya mengelola emosi atau mengatur fokus belajar.",
       "Libatkan orang tua bila kesulitan juga terasa di rumah.",
-      "Rujuk ke psikolog bila kesulitan berat dan menetap.",
+      "Rujuk ke psikolog bila kesulitan sangat tinggi, menetap, atau sangat mengganggu.",
     ])}
-    ${caveat("Ini skrining awal, bukan diagnosis. Butir ditulis untuk Examus dengan struktur lima area dan belum divalidasi. Jangan tampilkan skor atau label kepada murid maupun teman sekelasnya.")}`;
-  return { body, csv: () => [["No", "Nama", "L/P", ...Object.values(KK_AREAS), "Total kesulitan", "Dampak"], ...rows.map((r) => (r.filled ? [r.no, r.name, r.g, ...Object.keys(KK_AREAS).map((k) => r.p.s[k]), r.p.total, r.p.impact] : [r.no, r.name, r.g, "", "", "", "", "", "", ""]))] };
+    ${caveat("Ini skrining awal, bukan diagnosis. Strukturnya (lima area, skala 0-1-2, total kesulitan, dampak) dan batas pitanya mengikuti SDQ, tetapi butirnya ditulis untuk Examus, jadi batas itu hanya patokan sementara sampai ada norma lokal. Untuk keperluan klinis, pakai SDQ versi resmi berbahasa Indonesia (sdqinfo.org). Jangan tampilkan skor atau label kepada murid maupun teman sekelasnya.")}`;
+  return { body, csv: () => [["No", "Nama", "L/P", ...Object.values(KK_AREAS), "Total kesulitan", "Pita total", "Dampak"], ...rows.map((r) => (r.filled ? [r.no, r.name, r.g, ...ALL.map((k) => r.p.s[k]), r.p.total, kkLevelName(kkTotalLevel(r.p.total)), r.p.impact] : [r.no, r.name, r.g]))] };
 }
 
 /* ---------------- Suasana hati (PHQ-9) ---------------- */
@@ -89,7 +141,7 @@ export function emosiReport(s, res) {
   const cfg = s.config || {}, items = phqItems(cfg);
   const rows = join(s, res, (a) => phqProfile(a, cfg)), done = rows.filter((r) => r.filled);
   const today = done.filter((r) => r.p.priority === "hari ini"), week = done.filter((r) => r.p.priority === "minggu ini"), watch = done.filter((r) => r.p.priority === "pantau");
-  const BANDS = ["Minimal", "Ringan", "Sedang", "Cukup berat", "Berat"];
+  const BANDS = ["Minimal", "Ringan", "Sedang", "Sedang-berat", "Berat"];
   const body = `
     ${cfg.variant === "phq8" ? `<div class="notice">Sesi ini memakai PHQ-8 (tanpa pertanyaan tentang menyakiti diri). Tetap tanyakan keselamatan saat berbicara dengan murid yang skornya tinggi.</div>` : ""}
     <h2 class="sec-h">Siapa dihubungi</h2>
@@ -102,9 +154,9 @@ export function emosiReport(s, res) {
     ${tbl([{ t: "Gejala", wrap: 1 }, { t: "Lebih dari seminggu atau hampir setiap hari", num: 1 }], items.map((t, i) => [`${i + 1}. ${t[0].toUpperCase() + t.slice(1)}`, `${pct(done.filter((r) => Number(r.a[i]) >= 2).length, done.length)}%`]))}
     <h2 class="sec-h">Skor per murid</h2>
     ${tbl(["No", "Nama", { t: "Skor", num: 1 }, "Tingkat", ...(items.length === 9 ? [{ t: "No. 9", num: 1 }] : []), "Dampak"], rows.map((r) => (r.filled
-      ? [r.no, r.name, r.p.total, r.p.band, ...(items.length === 9 ? [r.p.item9] : []), ["Tidak sulit", "Agak sulit", "Sulit", "Sangat sulit"][r.p.impact]]
+      ? [r.no, r.name, r.p.total, r.p.band, ...(items.length === 9 ? [r.p.item9] : []), PHQ_IMPACT[r.p.impact]?.t || "-"]
       : [r.no, r.name, "-", "Belum mengisi", ...(items.length === 9 ? ["-"] : []), "-"])))}
-    <p class="muted small" style="margin-top:.5rem">Skor 0 sampai ${items.length * 3}. Tingkat: 0-4 minimal, 5-9 ringan, 10-14 sedang, 15-19 cukup berat, 20 ke atas berat (batas PHQ-9).</p>
+    <p class="muted small" style="margin-top:.5rem">Skor 0 sampai ${items.length * 3}. Tingkat: 0-4 minimal, 5-9 ringan, 10-14 sedang, 15-19 sedang-berat, 20-27 berat (pita standar PHQ-9, Kroenke dkk. 2001). Skor 10 ke atas dianjurkan evaluasi lanjut oleh tenaga profesional. Jawaban apa pun selain "tidak pernah" pada nomor 9 perlu ditanyakan langsung pada hari yang sama, berapa pun skor totalnya.</p>
     ${unfilled(rows)}
     ${tips("Protokol tindak lanjut", [
       "<b>Hari ini:</b> temui murid secara pribadi. Tanyakan langsung tentang keselamatannya. Bila ada rencana menyakiti diri, jangan tinggalkan sendirian, hubungi orang tua, dan rujuk ke puskesmas, psikolog, atau layanan darurat 112.",
@@ -186,8 +238,9 @@ export function amanReport(s, res) {
   const body = `
     <h2 class="sec-h">Siapa diajak bicara lebih dulu</h2>
     <div class="sumcards">${prio("Didahulukan", "warn", first.map((r) => ({ name: r.name, note: r.p.forms.join(", ") })), "Mengalami ancaman atau kekerasan fisik setidaknya kadang-kadang.")}
-      ${prio("Mengalami perundungan", "warn", victims.map((r) => ({ name: r.name, note: r.p.forms.slice(0, 2).join(", ") })), "Sering mengalami setidaknya satu bentuk perundungan.")}
+      ${prio("Mengalami perundungan", "warn", victims.map((r) => ({ name: r.name, note: [r.p.forms.slice(0, 2).join(", "), r.p.both ? "juga melakukan" : ""].filter(Boolean).join("; ") })), "Setidaknya satu bentuk, kadang-kadang atau lebih.")}
       ${prio("Melakukan perundungan", "", doers.map((r) => ({ name: r.name })), "Ajak bicara tanpa menghakimi; cari tahu penyebabnya.")}</div>
+    <p class="muted small" style="margin-top:.6rem">Klasifikasi mengikuti batas Solberg & Olweus (2003): mengalami atau melakukan bila setidaknya satu bentuk terjadi "kadang-kadang" (sekitar 2-3 kali sebulan) atau lebih dalam tiga bulan terakhir; "jarang" dicatat sebagai pantau.</p>
     <h2 class="sec-h">Gambaran kelas</h2>
     <div class="card">${bars([[PR_ASPEK.korban, aspect("korban")], [PR_ASPEK.pelaku, aspect("pelaku")], ["Merasa aman di sekolah", safePct]])}
       <p class="muted small" style="margin-top:.6rem">Mengalami dan melakukan = rata-rata frekuensi (0% tidak pernah, 100% sangat sering). Rasa aman = murid yang menjawab sering atau sangat sering pada kalimat tentang rasa aman.</p></div>
