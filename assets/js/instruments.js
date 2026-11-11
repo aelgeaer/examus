@@ -8,9 +8,10 @@ import { radar } from "./charts.js";
 import { gayaProfile, donut, VAK_COLOR } from "./gaya.js";
 
 // Layanan bantuan untuk anak: Healing119 (Kemenkes) dan SAPA 129 (KemenPPPA). Periksa nomornya secara berkala.
-const TALK = `<div class="gb-tips"><h2>Mau cerita?</h2><p style="margin-top:.4rem">Guru BK dan wali kelasmu siap mendengar. Atau hubungi:</p>
+const talk = (darurat = false) => `<div class="gb-tips"><h2>Mau cerita?</h2><p style="margin-top:.4rem">Guru BK dan wali kelasmu siap mendengar. Atau hubungi:</p>
   <p style="margin-top:.7rem"><b style="font-weight:600">Healing119</b><br><span class="muted small">Teman bicara, gratis 24 jam: telepon <a href="tel:119">119</a> lalu tekan 8, atau <a href="https://healing119.id" target="_blank" rel="noopener">healing119.id</a></span></p>
-  <p style="margin-top:.7rem"><b style="font-weight:600">SAPA 129</b><br><span class="muted small">Kalau mengalami atau melihat kekerasan: telepon <a href="tel:129">129</a> atau WhatsApp <a href="https://wa.me/628111129129" target="_blank" rel="noopener">08111-129-129</a></span></p></div>`;
+  <p style="margin-top:.7rem"><b style="font-weight:600">SAPA 129</b><br><span class="muted small">Kalau mengalami atau melihat kekerasan: telepon <a href="tel:129">129</a> atau WhatsApp <a href="https://wa.me/628111129129" target="_blank" rel="noopener">08111-129-129</a></span></p>${darurat ? `<p style="margin-top:.7rem"><b style="font-weight:600">Darurat</b><br><span class="muted small">IGD rumah sakit atau puskesmas terdekat</span></p>` : ""}</div>`;
+const TALK = talk();
 const HELP = `<div class="gb-tips"><h2>Kalau butuh teman bicara</h2><ul><li>Ceritakan kepada guru BK, wali kelas, atau orang dewasa yang kamu percaya.</li><li>Kalau kamu atau temanmu dalam bahaya, segera minta tolong orang dewasa terdekat atau telepon 112.</li></ul></div>`;
 const thanks = (name, body = "") => `<p class="gb-eyebrow">Terima kasih, ${esc(name)}</p><h1>Jawabanmu sudah tersimpan.</h1><p class="lead" style="margin-top:.5rem">Hanya gurumu yang bisa melihat jawabanmu.</p>${body}`;
 
@@ -92,18 +93,21 @@ export const kkLevel = (score, area) => {
 export const kkTotalLevel = (t) => (t >= 26 ? 3 : t >= 20 ? 2 : t >= 16 ? 1 : 0);
 export const kkLevelName = (lvl, area) => (area === "peduli" ? ["Wajar", "Sedikit rendah", "Rendah", "Sangat rendah"][lvl] : KK_LEVELS[lvl]);
 /* ---------------- Suasana hati (PHQ-9) ---------------- */
+// PHQ-9 (Kroenke, Spitzer & Williams, 2001) dengan kalimat untuk remaja sesuai contoh pengguna. Pilihan jawaban:
+// tidak pernah 0, beberapa hari 1, lebih dari seminggu 2, hampir setiap hari 3. Pada rentang dua minggu,
+// "lebih dari seminggu" setara dengan "lebih dari separuh hari" pada PHQ-9 asli.
 export const PHQ_ITEMS = [
   "merasa kurang tertarik atau kurang senang melakukan apa pun",
   "merasa sedih, murung, mudah kesal, atau putus asa",
   "sulit tidur, sering terbangun, atau justru tidur terlalu banyak",
   "merasa lelah atau kurang bertenaga",
-  "tidak nafsu makan, atau justru makan berlebihan",
-  "merasa buruk tentang dirimu, merasa gagal, atau merasa mengecewakan dirimu atau keluargamu",
-  "sulit berkonsentrasi, misalnya saat membaca, belajar, atau menonton",
-  "bergerak atau berbicara sangat lambat sampai orang lain memperhatikan, atau justru sangat gelisah sampai sulit diam",
-  "berpikir lebih baik mati, atau ingin menyakiti dirimu sendiri",
+  "tidak nafsu makan, berat badan turun, atau justru makan berlebihan",
+  "merasa dirimu buruk, merasa gagal, atau merasa mengecewakan keluarga",
+  "sulit berkonsentrasi, misalnya saat belajar, membaca, atau menonton",
+  "bergerak atau berbicara sangat lambat sampai orang lain memperhatikannya, atau justru sangat gelisah sampai tidak bisa diam",
+  "berpikir lebih baik mati saja, atau ingin menyakiti dirimu sendiri dengan cara apa pun",
 ];
-export const PHQ_OPTS = [{ v: 0, t: "Tidak pernah" }, { v: 1, t: "Beberapa hari" }, { v: 2, t: "Lebih dari separuh hari" }, { v: 3, t: "Hampir setiap hari" }];
+export const PHQ_OPTS = [{ v: 0, t: "Tidak pernah" }, { v: 1, t: "Beberapa hari" }, { v: 2, t: "Lebih dari seminggu" }, { v: 3, t: "Hampir setiap hari" }];
 export const PHQ_IMPACT = [{ v: 0, t: "Tidak sulit sama sekali" }, { v: 1, t: "Agak sulit" }, { v: 2, t: "Sangat sulit" }, { v: 3, t: "Amat sangat sulit" }];
 export const phqItems = (cfg) => (cfg.variant === "phq8" ? PHQ_ITEMS.slice(0, 8) : PHQ_ITEMS);
 export function phqProfile(a, cfg) {
@@ -304,18 +308,23 @@ export const INSTR = {
     },
   },
   emosi: {
-    heading: "Bagaimana perasaanmu?",
-    intro: (cfg) => [["Dua minggu terakhir", `Ada ${phqItems(cfg).length} pertanyaan tentang perasaanmu selama dua minggu terakhir. Pilih seberapa sering kamu mengalaminya.`], ["Tidak ada jawaban yang salah", "Semua orang pernah merasa tidak baik. Jawab sesuai yang benar-benar kamu rasakan."], ["Rahasia, hanya gurumu yang melihat", "Gurumu membaca jawabanmu untuk memastikan kamu baik-baik saja."]],
+    heading: "Bagaimana kabarmu dua minggu ini?",
+    intro: (cfg) => [["Bagaimana kamu dua minggu ini?", `Ada ${phqItems(cfg).length + 1} pertanyaan singkat tentang perasaan, tidur, dan tenagamu. Sekitar 3 menit.`], ["Pilih seberapa sering", "Kalau ragu, pilih yang paling mendekati.", ["Tidak pernah", "Beberapa hari", "Lebih dari seminggu", "Hampir setiap hari"]], ["Hanya guru BK-mu yang membaca", "Supaya ia tahu siapa yang mungkin butuh teman bicara. Teman-temanmu tidak bisa melihatnya, dan nilaimu tidak terpengaruh."]],
     items: (cfg) => phqItems(cfg).map((t) => ({ text: t })),
-    stem: "Selama dua minggu terakhir, seberapa sering kamu…",
+    stem: "Dalam 2 minggu terakhir, seberapa sering kamu…",
     options: () => PHQ_OPTS,
-    extra: () => [{ key: "impact", text: "Kalau kamu mengalami hal-hal tadi, seberapa sulit hal itu membuatmu belajar, mengurus urusan di rumah, atau bergaul dengan teman?", options: PHQ_IMPACT }],
+    extra: () => [{ key: "impact", text: "Kalau kamu mengalami satu atau lebih hal tadi, seberapa sulit hal itu membuatmu belajar, mengerjakan urusan di rumah, atau bergaul dengan teman?", options: PHQ_IMPACT }],
     result(a, cfg, name) {
       const p = phqProfile(a, cfg);
-      const urgent = p.priority === "hari ini" || p.priority === "minggu ini";
-      return thanks(name, urgent
-        ? `<div class="gb-tips"><h2>Kamu tidak sendirian</h2><ul><li>Terima kasih sudah jujur. Perasaan berat seperti ini bisa membaik dengan bantuan.</li><li>Gurumu akan mengajakmu bicara. Kamu juga boleh langsung menemui guru BK hari ini.</li><li>Kalau kamu sedang ingin menyakiti dirimu, segera beri tahu orang dewasa di dekatmu atau telepon 112.</li></ul></div>`
-        : `<div class="gb-tips"><h2>Untukmu</h2><ul><li>Perasaanmu penting. Tidur cukup, bergerak, dan mengobrol dengan orang yang kamu sayangi bisa membantu.</li><li>Kalau suatu saat terasa berat, kamu tidak harus menanggungnya sendiri.</li></ul></div>${HELP}`);
+      const helps = `<div class="gb-tips"><h2>Yang sering membantu</h2><ul><li>Tidur dan bangun di jam yang sama, dan simpan HP sebelum tidur.</li><li>Gerakkan badan setiap hari, walau hanya jalan kaki 15 menit.</li><li>Makan teratur, walau sedikit.</li><li>Lakukan satu hal kecil yang biasanya kamu suka.</li><li>Ceritakan perasaanmu ke satu orang yang kamu percaya.</li></ul></div>`;
+      const urgent = p.item9 >= 1 || p.total >= 15;
+      const head = urgent
+        ? `<h1>Terima kasih sudah jujur. Kamu tidak sendirian.</h1><p class="lead" style="margin-top:.6rem">Belakangan ini terasa cukup berat buatmu. Itu bukan salahmu, dan kamu layak dibantu. Gurumu akan mengajakmu bicara, dan kamu juga boleh langsung menemui guru BK hari ini.</p>`
+        : p.total >= 5
+          ? `<h1>Ada beberapa hari yang terasa berat, ya.</h1><p class="lead" style="margin-top:.6rem">Itu wajar dialami siapa pun. Hal-hal kecil di bawah ini sering membantu.</p>`
+          : `<h1>Terima kasih sudah menjawab.</h1><p class="lead" style="margin-top:.6rem">Dari jawabanmu, belakangan ini kamu cukup baik-baik saja. Tetap jaga dirimu, dan ingat kamu boleh bercerita kapan saja.</p>`;
+      const safety = p.item9 >= 1 ? `<div class="gb-tips"><h2>Kalau pikiran itu muncul lagi</h2><ul><li>Segera beri tahu orang dewasa yang kamu percaya, sekarang juga, atau hubungi Healing119 (telepon 119, tekan 8).</li><li>Kalau kamu merasa dalam bahaya saat ini, pergi ke IGD atau puskesmas terdekat dan jangan sendirian.</li></ul></div>` : "";
+      return `<p class="gb-eyebrow">Terima kasih, ${esc(name)}</p>${head}${safety}${helps}${talk(true)}`;
     },
   },
   kepribadian: {
