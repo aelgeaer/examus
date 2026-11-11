@@ -1,6 +1,7 @@
 import { esc, $, $$, toast, fmtDate, firstName, download, toCSV } from "./util.js";
 import { store } from "./store.js";
-import { getAssessment, VAK, VAK_TIPS, GAYA_ITEMS, RIASEC, MINAT_ITEMS, BIDANG, KEBUTUHAN_ITEMS } from "./data.js";
+import { getAssessment, VAK, GAYA_ITEMS, RIASEC, MINAT_ITEMS, BIDANG, KEBUTUHAN_ITEMS } from "./data.js";
+import { gayaProfile, donut, VAK_COLOR } from "./gaya.js";
 import { header } from "./pages-public.js";
 import { analyze, mountSociogram, describe, svgToPngBlob } from "./sociogram.js";
 
@@ -77,32 +78,55 @@ function socio(s, res) {
 }
 
 /* ---------- Gaya belajar ---------- */
+const STRATEGI = {
+  V: ["Tampilkan bagan, peta konsep, atau gambar di setiap materi baru.", "Tulis langkah dan kata kunci di papan, dan pakai warna untuk mengelompokkannya.", "Beri contoh yang bisa dilihat sebelum penjelasan panjang."],
+  A: ["Buka materi dengan pertanyaan atau cerita, lalu ajak berdiskusi.", "Minta murid menjelaskan ulang dengan kata-katanya sendiri secara berpasangan.", "Bacakan instruksi penting dengan lantang, jangan hanya ditulis."],
+  K: ["Sisipkan praktik atau gerak di sela penjelasan, misalnya tiap 15 sampai 20 menit.", "Pakai benda nyata, peragaan, atau permainan peran.", "Beri tugas membuat sesuatu atau mencoba langsung, tidak hanya mencatat."],
+};
+const GROUP = { V: "Visual", A: "Auditori", K: "Kinestetik", S: "Seimbang" };
+
 function gaya(s, res) {
   const byNo = new Map(res.map((r) => [r.no, r.answers || {}]));
-  const rows = s.roster.map((m) => {
-    const a = byNo.get(m.no); if (!a) return { ...m, filled: false };
-    const c = { V: 0, A: 0, K: 0 }; GAYA_ITEMS.forEach((_, i) => a[i] in c && c[a[i]]++);
-    const max = Math.max(c.V, c.A, c.K), top = Object.keys(c).filter((k) => c[k] === max);
-    const label = top.length === 1 ? VAK[top[0]] : top.length === 2 ? `${VAK[top[0]]} dan ${VAK[top[1]].toLowerCase()}` : "Seimbang";
-    return { ...m, filled: true, c, top, label };
-  });
-  const done = rows.filter((r) => r.filled), n = done.length;
-  const groups = [["Visual", done.filter((r) => r.top.length === 1 && r.top[0] === "V").length], ["Auditori", done.filter((r) => r.top.length === 1 && r.top[0] === "A").length], ["Kinestetik", done.filter((r) => r.top.length === 1 && r.top[0] === "K").length], ["Kombinasi atau seimbang", done.filter((r) => r.top.length > 1).length]];
-  const tot = { V: 0, A: 0, K: 0 }; done.forEach((r) => "VAK".split("").forEach((k) => (tot[k] += r.c[k])));
+  const rows = s.roster.map((m) => (byNo.has(m.no) ? { ...m, filled: true, p: gayaProfile(byNo.get(m.no)) } : { ...m, filled: false }));
+  const done = rows.filter((r) => r.filled);
+  const tot = { V: 0, A: 0, K: 0 }; done.forEach((r) => "VAK".split("").forEach((k) => (tot[k] += r.p.c[k])));
+  const sum = tot.V + tot.A + tot.K || 1;
+  const cp = Object.fromEntries("VAK".split("").map((k) => [k, Math.round((tot[k] / sum) * 100)]));
   const order = Object.keys(tot).sort((a, b) => tot[b] - tot[a]);
+  const close = cp[order[0]] - cp[order[1]] < 5;
+  const headline = close ? `Kelas ini cenderung ${VAK[order[0]].toLowerCase()} dan ${VAK[order[1]].toLowerCase()}.` : `Kelas ini cenderung ${VAK[order[0]].toLowerCase()}.`;
+  const groups = { V: [], A: [], K: [], S: [] }; done.forEach((r) => groups[r.p.group].push(r));
+  const perStudent = Object.keys(groups).filter((k) => groups[k].length).map((k) => `${groups[k].length} ${GROUP[k].toLowerCase()}`).join(", ");
+  const strategies = [...STRATEGI[order[0]], "Variasikan cara mengajar: tiap materi dijelaskan, diperlihatkan, dan dicoba.", "Pakai hasil ini agar murid nyaman belajar, bukan untuk membatasi cara mereka belajar."];
+  const share = Math.round((done.length / s.roster.length) * 100);
   const body = `
-    <h2 class="sec-h">Kecenderungan kelas</h2>
-    <div class="card">${bars(groups.map(([g, v]) => [g, v, `${v} murid`]), Math.max(1, ...groups.map((g) => g[1])))}</div>
-    <h2 class="sec-h">Hasil per murid</h2>
-    ${table(["No", "Nama", { t: "Visual", num: 1 }, { t: "Auditori", num: 1 }, { t: "Kinestetik", num: 1 }, "Kecenderungan"], rows.map((r) => r.filled ? [r.no, r.name, r.c.V, r.c.A, r.c.K, r.label] : [r.no, r.name, "-", "-", "-", "Belum mengisi"]))}
-    <p class="muted small" style="margin-top:.5rem">Angka menunjukkan berapa dari ${GAYA_ITEMS.length} butir yang dijawab dengan pilihan visual, auditori, atau kinestetik.</p>
-    ${tips([
-      `Pilihan terbanyak di kelas ini: <strong>${VAK[order[0]].toLowerCase()}</strong>, lalu ${VAK[order[1]].toLowerCase()}. ${VAK_TIPS[order[0]]}`,
-      `Tetap sediakan kegiatan untuk kecenderungan lain. ${VAK_TIPS[order[2]]}`,
-      "Baca hasil ini sebagai preferensi, bukan kemampuan. Murid tetap perlu berlatih belajar dengan berbagai cara.",
-      "Pakai hasil perorangan untuk membuka obrolan tentang kebiasaan belajar, bukan untuk mengelompokkan murid secara permanen.",
-    ])}`;
-  return { body, n, csv: () => [["No", "Nama", "L/P", "Visual", "Auditori", "Kinestetik", "Kecenderungan"], ...rows.map((r) => r.filled ? [r.no, r.name, r.g, r.c.V, r.c.A, r.c.K, r.label] : [r.no, r.name, r.g, "", "", "", "Belum mengisi"])] };
+    ${share < 80 ? `<div class="notice">Baru ${share}% yang mengisi. Gambaran kelas lebih tepat setelah 80% murid mengisi.</div>` : ""}
+    <div class="gsum">
+      ${donut(tot, "Perbandingan gaya belajar kelas")}
+      <div>
+        <h2>${esc(headline)}</h2>
+        <dl class="glegend">${"VAK".split("").map((k) => `<dt><span class="d" style="background:${VAK_COLOR[k]}"></span>${VAK[k]}</dt><dd>${cp[k]}%</dd>`).join("")}</dl>
+        <p style="margin-top:.6rem">Per murid: ${esc(perStudent || "-")}.</p>
+        <p class="muted" style="margin-top:.4rem">${esc(STRATEGI[order[0]][0])}</p>
+      </div>
+    </div>
+
+    <h2 class="sec-h">Strategi mengajar untuk kelas ini</h2>
+    <ol class="strat">${strategies.map((x, i) => `<li class="${i < 3 ? "hi" : ""}"><span>${i + 1}</span>${esc(x)}</li>`).join("")}</ol>
+
+    <h2 class="sec-h">Murid per gaya</h2>
+    <p class="muted">Berguna untuk membagi kelompok yang beragam: ambil satu atau dua murid dari tiap kotak.</p>
+    <div class="ggroups">${Object.keys(groups).map((k) => `<div class="card"><p class="gh"><span class="d" style="background:${VAK_COLOR[k] || "#cdeedd"}"></span>${GROUP[k]} <span class="muted">${groups[k].length}</span></p>
+      ${groups[k].length ? `<ul>${groups[k].map((r) => `<li><span>${esc(r.name)}</span>${r.p.combo ? `<span class="muted small">+ ${VAK[r.p.top[1]]}</span>` : ""}</li>`).join("")}</ul>` : `<p class="muted">-</p>`}</div>`).join("")}</div>
+
+    <h2 class="sec-h">Skor per murid</h2>
+    ${table(["No", "Nama", "L/P", { t: "V (%)", num: 1 }, { t: "A (%)", num: 1 }, { t: "K (%)", num: 1 }, "Gaya"], rows.map((r) => r.filled ? [r.no, r.name, r.g || "-", r.p.pct.V, r.p.pct.A, r.p.pct.K, r.p.title] : [r.no, r.name, r.g || "-", "-", "-", "-", "Belum mengisi"]))}
+    <p class="muted small" style="margin-top:.5rem">Persentase = bagian jawaban murid yang memilih gaya itu dari ${GAYA_ITEMS.length} situasi. Kombinasi bila dua gaya teratas selisih paling banyak 2 jawaban; seimbang bila ketiganya selisih paling banyak 1 jawaban.</p>
+    ${rows.some((r) => !r.filled) ? `<details class="card" style="margin-top:1rem"><summary>Belum mengisi (${rows.filter((r) => !r.filled).length})</summary><p class="muted" style="margin-top:.6rem">${esc(rows.filter((r) => !r.filled).map((r) => r.name).join(", "))}</p></details>` : ""}
+
+    <div class="caveat">Hasil ini menunjukkan <b>preferensi</b> belajar, bukan kemampuan. Riset tidak mendukung mengajar hanya dengan satu gaya; gunakan hasil ini untuk memvariasikan cara mengajar dan membuat murid nyaman. Hasil perorangan boleh dibicarakan dengan murid dan orang tuanya.</div>
+    <p class="no-print" style="margin-top:1rem"><a class="btn" href="#/mulai/sosiometri${s.classId ? "?kelas=" + s.classId : ""}">Petakan pertemanan kelas ini → Sosiometri</a></p>`;
+  return { body, csv: () => [["No", "Nama", "L/P", "Visual (%)", "Auditori (%)", "Kinestetik (%)", "Gaya"], ...rows.map((r) => r.filled ? [r.no, r.name, r.g, r.p.pct.V, r.p.pct.A, r.p.pct.K, r.p.title] : [r.no, r.name, r.g, "", "", "", "Belum mengisi"])] };
 }
 
 /* ---------- Minat karier ---------- */
@@ -177,10 +201,11 @@ export async function report({ user, params }) {
   const r = BUILD[s.type](s, res);
   const today = fmtDate(Date.now()).replace(/^\S+,\s*/, "");
   const html = `${header(user, "dasbor")}<main class="page"><div class="wrap">
-    <a class="back no-print" href="#/sesi/${s.id}">← ${esc(s.className)}</a>
+    <a class="back no-print" href="#/sesi/${s.id}">← Sesi</a>
     <div class="print-head">${user.school ? `<p style="font-weight:600;font-size:14pt">${esc(user.school)}</p>` : ""}</div>
-    <h1 class="page-title">Laporan ${esc(a.name.toLowerCase())}</h1>
-    <p class="page-sub">${esc(s.className)}. ${res.length} dari ${s.roster.length} murid mengisi. Disusun ${today}.</p>
+    <p class="eyebrow">Laporan ${esc(a.name.toLowerCase())} · ${today}</p>
+    <h1 class="page-title" style="margin-top:.2rem">${esc(s.className)}</h1>
+    <p class="page-sub">${res.length} dari ${s.roster.length} murid mengisi (${pct(res.length, s.roster.length)}%).</p>
     <p class="muted small" style="margin-top:.4rem">Rahasia. Hanya untuk guru yang berwenang.</p>
     <div class="rowflex no-print" style="margin-top:1.2rem"><button class="btn primary sm" id="rp-print">Cetak atau simpan PDF</button><button class="btn sm" id="rp-csv">Unduh CSV untuk Excel</button></div>
     ${r.body}

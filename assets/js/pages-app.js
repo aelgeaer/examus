@@ -259,27 +259,42 @@ export async function session({ user, params }) {
   const waiting = s.roster.filter((m) => !done.has(m.no));
   const link = studentLink(s.code);
   const waText = `Halo, mohon isi angket ${a.name.toLowerCase()} untuk ${s.className}. Buka link ini, pilih namamu, lalu jawab pertanyaannya (sekitar 5 menit).\n${link}`;
+  const doneList = s.roster.filter((m) => done.has(m.no));
+  const nameList = (list) => `<ol class="namelist">${list.map((m) => `<li>${esc(m.name)}</li>`).join("")}</ol>`;
   const html = `${header(user, "dasbor")}<main class="page"><div class="narrow">
     <a class="back" href="#/dasbor">← Dasbor</a>
     <h1 class="page-title">${esc(s.className)}</h1>
-    <p class="page-sub">${esc(a.name)}. ${open ? `Dibuka sampai ${fmtDate(s.closesAt, true)}.` : "Pengisian sudah ditutup."}</p>
-    ${open ? `<div class="sharebox" style="margin-top:1.4rem">
-      <b style="font-weight:500">Kirim link ini ke murid</b>
-      <div class="url" id="ss-url">${esc(link)}</div>
+    <p class="page-sub">${esc(a.name)}. ${open ? `<span class="ok-text">Dibuka sampai ${fmtDate(s.closesAt, true)}.</span>` : "Pengisian sudah ditutup."}</p>
+
+    ${open ? `<section class="linkcard">
+      <h2 class="stepnum"><span>1</span>Kirim link ini ke murid</h2>
+      <div class="linkurl" id="ss-url">${esc(link)}</div>
       <a class="btn primary block" href="https://wa.me/?text=${encodeURIComponent(waText)}" target="_blank" rel="noopener">Kirim lewat WhatsApp</a>
-      <button class="btn white block" id="ss-share">Bagikan lewat aplikasi lain</button>
-      <button class="btn white block" id="ss-copy">Salin link</button>
-      <button class="btn white block" id="ss-qr">Tampilkan kode QR</button>
-      <div id="ss-qrbox" class="hide" style="text-align:center;margin-top:.8rem"></div>
-    </div>` : ""}
-    <h2 class="sec-h">Jawaban</h2>
-    <p><span class="big-num" id="ss-n">${done.size}</span> <span class="muted">dari ${total} murid sudah mengisi</span></p>
-    <div class="progress" style="margin:.7rem 0 1rem" role="progressbar" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${done.size}"><i id="ss-bar" style="width:${(done.size / total) * 100}%"></i></div>
-    <a class="btn primary block" href="#/sesi/${s.id}/hasil"${done.size ? "" : ' aria-disabled="true" tabindex="-1" style="pointer-events:none"'}>Lihat hasil</a>
-    <button class="btn block" id="ss-refresh" style="margin-top:.6rem">Perbarui</button>${open ? `<p class="muted small" style="margin-top:.5rem">Angka ini diperbarui sendiri. Halaman ini boleh ditutup; murid tetap bisa mengisi.</p>` : ""}
-    ${waiting.length ? `<details class="card" style="margin-top:1rem"><summary style="cursor:pointer;font-weight:500">Belum mengisi (${waiting.length})</summary><p class="muted" style="margin-top:.6rem">${esc(waiting.map((m) => m.name).join(", "))}</p></details>` : ""}
-    <h2 class="sec-h">Pengaturan sesi</h2>
-    <div class="rowflex"><button class="btn" id="ss-toggle">${open ? "Tutup pengisian sekarang" : "Buka lagi selama 7 hari"}</button><button class="btn danger" id="ss-del">Hapus sesi</button></div>
+      <div class="linkbtns">
+        <button class="btn white" id="ss-share">Bagikan lewat aplikasi lain</button>
+        <button class="btn white" id="ss-copy">Salin link</button>
+        <button class="btn white" id="ss-qr">Tampilkan kode QR</button>
+        <a class="btn white" href="#/s/${esc(s.code)}" target="_blank" rel="noopener">Buka halaman murid</a>
+      </div>
+      <div id="ss-qrbox" class="hide qrbox"></div>
+    </section>` : ""}
+
+    <h2 class="stepnum sec-h"><span>${open ? 2 : 1}</span>${open ? "Tunggu murid mengisi" : "Jawaban"}</h2>
+    <p><span class="big-num" id="ss-n">${done.size}</span> <span class="muted">dari ${total} sudah mengisi</span></p>
+    <div class="progress" style="margin:.7rem 0 .6rem" role="progressbar" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${done.size}"><i id="ss-bar" style="width:${(done.size / total) * 100}%"></i></div>
+    ${open ? `<p class="muted small">Angka ini diperbarui sendiri. Halaman ini boleh ditutup; murid tetap bisa mengisi. <button class="linkbtn" id="ss-refresh">Muat ulang daftar</button></p>` : `<button class="linkbtn" id="ss-refresh">Muat ulang</button>`}
+    <div class="stack" style="margin-top:1rem">
+      ${waiting.length ? `<details class="card"><summary>Belum mengisi (${waiting.length})</summary>${nameList(waiting)}</details>` : ""}
+      ${doneList.length ? `<details class="card"><summary>Sudah mengisi (${doneList.length})</summary>${nameList(doneList)}</details>` : ""}
+      ${open ? `<details class="card"><summary>Ada murid yang namanya tidak ada?</summary><p style="margin-top:.6rem">Daftar nama di link ini diambil dari daftar kelas saat sesi dibuat. Tambahkan namanya di <a href="#/kelas/${s.classId || ""}">daftar kelas</a>, lalu mulai sesi baru untuk kelas itu dan bagikan link yang baru.</p></details>` : ""}
+    </div>
+
+    <h2 class="stepnum sec-h"><span>${open ? 3 : 2}</span>Lihat hasil</h2>
+    ${done.size ? `<a class="btn primary block" href="#/sesi/${s.id}/hasil">Lihat hasil ${done.size} murid</a>
+      <p class="muted small" style="margin-top:.5rem">${done.size < total ? "Hasil paling akurat setelah hampir semua murid mengisi." : "Semua murid sudah mengisi."}</p>`
+      : `<p class="muted">Hasil bisa dibuka begitu ada murid yang mengisi.</p>`}
+
+    <div class="rowflex" style="margin-top:2rem"><button class="btn" id="ss-toggle">${open ? "Tutup pengisian sekarang" : "Buka lagi selama 7 hari"}</button><button class="btn danger" id="ss-del">Hapus sesi</button></div>
   </div></main>`;
   return {
     title: s.className, html,
@@ -296,7 +311,7 @@ export async function session({ user, params }) {
           if (!box.innerHTML) {
             const QR = await import("https://esm.sh/qrcode@1.5.4");
             const url = await (QR.default || QR).toDataURL(link, { width: 360, margin: 1 });
-            box.innerHTML = `<img src="${url}" alt="Kode QR untuk link angket" style="width:100%;max-width:300px;background:#fff;border-radius:12px;padding:8px"><p class="muted small" style="margin-top:.4rem">Tampilkan di layar kelas. Murid memindainya dengan kamera HP.</p>`;
+            box.innerHTML = `<img src="${url}" alt="Kode QR untuk link angket"><p class="muted small" style="margin-top:.4rem">Tampilkan di layar kelas. Murid memindainya dengan kamera HP.</p>`;
           }
           box.classList.remove("hide"); e.currentTarget.textContent = "Sembunyikan kode QR";
         } catch { toast("Kode QR tidak bisa dibuat. Periksa koneksi internet."); }

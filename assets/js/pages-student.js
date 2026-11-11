@@ -1,6 +1,7 @@
 import { esc, $, firstName, toast } from "./util.js";
 import { store } from "./store.js";
-import { GAYA_ITEMS, MINAT_ITEMS, MINAT_SCALE, KEBUTUHAN_ITEMS, VAK, VAK_STUDENT } from "./data.js";
+import { GAYA_ITEMS, MINAT_ITEMS, MINAT_SCALE, KEBUTUHAN_ITEMS, VAK } from "./data.js";
+import { gayaProfile, donut, VAK_COLOR } from "./gaya.js";
 
 const top = `<div class="fill-top narrow"><span class="lockup"><img src="assets/img/logo.svg" alt="" width="36" height="36"><span class="words"><span class="name">Examus</span><span class="by">by prepod</span></span></span></div>`;
 const message = (title, text) => `<div class="fill">${top}<main class="fill-main narrow"><h1>${esc(title)}</h1><p class="page-sub">${esc(text)}</p></main></div>`;
@@ -23,35 +24,6 @@ const INTRO = (n) => [
   ["Tidak ada jawaban yang salah", "Jawab seperti kamu biasanya. Cuma sekitar 5 menit."],
   ["Hasilnya langsung untukmu", "Di akhir, kamu melihat cara belajar yang paling cocok untukmu."],
 ];
-const VAK_COLOR = { V: "#ffcf8f", A: "#9ccbf3", K: "#1565b8" };
-
-// Menghitung ringkasan hasil seorang murid dari jawabannya.
-function gayaResult(answers) {
-  const c = { V: 0, A: 0, K: 0 }; GAYA_ITEMS.forEach((_, i) => answers[i] in c && c[answers[i]]++);
-  const total = c.V + c.A + c.K || 1;
-  const order = Object.keys(c).sort((a, b) => c[b] - c[a]);
-  const combo = c[order[0]] - c[order[1]] <= 2;
-  const top = combo ? [order[0], order[1]] : [order[0]];
-  const pct = Object.fromEntries(order.map((k) => [k, Math.round((c[k] / total) * 100)]));
-  const even = c[order[0]] - c[order[2]] <= 1;
-  const title = even ? "Seimbang" : top.map((k) => VAK[k]).join("–");
-  const desc = even ? "Kamu nyaman belajar lewat melihat, mendengar, dan bergerak sekaligus." : combo
-    ? `Kamu paling nyaman belajar lewat ${VAK_STUDENT[top[0]].verb}, juga lewat ${VAK_STUDENT[top[1]].verb}.`
-    : `Kamu paling nyaman belajar lewat ${VAK_STUDENT[top[0]].verb}.`;
-  return { c, pct, order, top, title, desc, tips: (even ? order : top).flatMap((k) => VAK_STUDENT[k].tips).slice(0, 4) };
-}
-
-function donut(c) {
-  const total = c.V + c.A + c.K || 1, R = 100, cx = 120, cy = 120; let a0 = -Math.PI / 2;
-  const arcs = ["V", "A", "K"].filter((k) => c[k] > 0).map((k) => {
-    const a1 = a0 + (c[k] / total) * 2 * Math.PI, large = a1 - a0 > Math.PI ? 1 : 0;
-    const p = (a) => [cx + R * Math.cos(a), cy + R * Math.sin(a)];
-    const [x0, y0] = p(a0), [x1, y1] = p(a1); a0 = a1;
-    return c[k] === total ? `<circle cx="${cx}" cy="${cy}" r="${R}" fill="${VAK_COLOR[k]}"/>` : `<path d="M${cx} ${cy} L${x0} ${y0} A${R} ${R} 0 ${large} 1 ${x1} ${y1} Z" fill="${VAK_COLOR[k]}" stroke="#fff" stroke-width="3"/>`;
-  }).join("");
-  return `<svg class="donut" viewBox="0 0 240 240" role="img" aria-label="Perbandingan gaya belajarmu"><circle cx="120" cy="120" r="116" fill="#cfe6fb"/>${arcs}<circle cx="120" cy="120" r="34" fill="#0c2340"/></svg>`;
-}
-
 function gayaFlow(pub) {
   const screens = GAYA_ITEMS.map((it, i) => ({ key: i, title: it.text, options: it.options.map((_, j, arr) => arr[(j + i) % 3]) }));
   return {
@@ -95,7 +67,7 @@ function gayaFlow(pub) {
             main.querySelectorAll(".gb-opt").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
             if (!last) { setTimeout(() => { if (stage === "q" && step === sc.key) { step++; draw(); scrollTo(0, 0); } }, 220); return; }
             busy = true;
-            try { await store.submit(pub.code, me, answers); filled.add(me); result = gayaResult(answers); goTo("result"); }
+            try { await store.submit(pub.code, me, answers); filled.add(me); result = gayaProfile(answers); goTo("result"); }
             catch (ex) { toast(ex.message); }
             busy = false;
           }));
@@ -103,7 +75,7 @@ function gayaFlow(pub) {
         } else {
           const r = result;
           main.innerHTML = `<div class="gb-result"><p class="gb-eyebrow">Hasil gaya belajarmu</p>
-            ${donut(r.c)}
+            ${donut(r.c, "Perbandingan gaya belajarmu")}
             <h1>${esc(r.title)}</h1><p class="lead">${esc(r.desc)}</p>
             <div class="gb-stack" aria-hidden="true">${r.order.filter((k) => r.c[k] > 0).map((k) => `<i style="flex:${r.c[k]};background:${VAK_COLOR[k]}"></i>`).join("")}</div>
             <div class="gb-legend">${["V", "A", "K"].map((k) => `<span><span class="d" style="background:${VAK_COLOR[k]}"></span>${VAK[k]} <b>${r.pct[k]}%</b></span>`).join("")}</div>
