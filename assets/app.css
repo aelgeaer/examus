@@ -613,3 +613,7 @@ dialog.sheet::backdrop { background: rgba(12, 35, 64, .45); }
 /* Jenjang yang disarankan */
 .notice.grade { margin-top: 1rem; font-size: .95rem; line-height: 1.5; }
 .notice.grade.warn { background: #fde2e2; }
+/* Nama murid yang sudah mengisi: tetap tampil, tidak bisa dipilih */
+.gb-name { display: flex; justify-content: space-between; align-items: center; gap: .8rem; width: 100%; }
+.gb-name.done { background: var(--paper); color: #9aa8b8; cursor: default; }
+.gb-name.done .tag { background: none; color: #9aa8b8; font-size: .85rem; padding: 0; margin: 0; }

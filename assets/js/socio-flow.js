@@ -47,9 +47,8 @@ export function socioFlow(pub, top) {
           $("#gb-back", main)?.addEventListener("click", () => { introStep--; draw(); });
         } else if (stage === "name") {
           const open = pub.roster.filter((m) => !filled.has(m.no));
-          if (!open.length) { main.innerHTML = `<h1 style="margin-top:1.6rem">Semua murid sudah mengisi</h1><p class="page-sub">Terima kasih. Kalau namamu belum tercatat, hubungi gurumu.</p>`; return; }
           main.innerHTML = `<h1 style="margin-top:1.6rem">Siapa namamu?</h1>
-            <div class="gb-names">${open.map((m) => `<button class="gb-name" data-v="${m.no}" aria-pressed="${me === m.no}">${esc(m.name)}</button>`).join("")}</div>
+            <div class="gb-names">${pub.roster.map((m) => (filled.has(m.no) ? `<button class="gb-name done" disabled><span>${esc(m.name)}</span><span class="tag">sudah mengisi</span></button>` : `<button class="gb-name" data-v="${m.no}" aria-pressed="${me === m.no}">${esc(m.name)}</button>`)).join("")}</div>${open.length ? "" : `<p class="muted" style="margin-top:1rem">Semua murid sudah mengisi. Kalau namamu belum tercatat, hubungi gurumu.</p>`}
             <button class="btn primary block" id="gb-next" style="margin-top:1.6rem"${me == null ? " disabled" : ""}>${me == null ? "Pilih namamu dulu" : `Lanjut sebagai ${esc(firstName(nameOf(me)))}`}</button>
             <button class="gb-ghost" id="gb-back">Kembali</button>`;
           main.querySelectorAll(".gb-name").forEach((b) => (b.onclick = () => { me = Number(b.dataset.v); draw(); }));
