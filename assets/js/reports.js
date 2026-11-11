@@ -6,6 +6,7 @@ import { header } from "./pages-public.js";
 import { socioReport } from "./report-socio.js";
 import { minatReport, kekuatanReport, emosiReport, kepribadianReport, akpdReport } from "./report-more.js";
 import { amanReport } from "./report-aman.js";
+import { hasDoc, buildDoc, docxBlob, printDoc, saveBlob } from "./report-doc.js";
 import { kekuatanReport2, emosiReport2, kepribadianReport2, akpdReport2 } from "./report-v2.js";
 
 const pct = (n, d) => (d ? Math.round((n / d) * 100) : 0);
@@ -95,7 +96,7 @@ function kebutuhan(s, res) {
   return { body, csv: () => [["Pernyataan", "Bidang", "Murid", "Persen"], ...items.map((x) => [x.text, BIDANG[x.k], x.yes, pct(x.yes, n)]), [], ["No", "Nama", ...KEYS.map((k) => BIDANG[k]), "Total"], ...rows] };
 }
 
-const BUILD = { sosiometri: socioReport, "gaya-belajar": gaya, "minat-karier": minatReport, kebutuhan, kekuatan: kekuatanReport2, emosi: emosiReport2, kepribadian: kepribadianReport2, akpd: akpdReport2, aman: amanReport };
+export const BUILD = { sosiometri: socioReport, "gaya-belajar": gaya, "minat-karier": minatReport, kebutuhan, kekuatan: kekuatanReport2, emosi: emosiReport2, kepribadian: kepribadianReport2, akpd: akpdReport2, aman: amanReport };
 
 export async function report({ user, params }) {
   const s = await store.getSession(params.id);
@@ -103,7 +104,7 @@ export async function report({ user, params }) {
   const a = getAssessment(s.type);
   const res = await store.listResponses(s.id);
   if (!res.length) return { html: `${header(user, "dasbor")}<main class="page"><div class="narrow"><a class="back" href="#/sesi/${s.id}">← ${esc(s.className)}</a><h1 class="page-title">Belum ada jawaban</h1><p class="page-sub">Laporan muncul setelah setidaknya satu murid mengisi.</p></div></main>` };
-  const r = BUILD[s.type](s, res);
+  const r = BUILD[s.type](s, res), formal = hasDoc(s.type);
   const today = fmtDate(Date.now()).replace(/^\S+,\s*/, "");
   const html = `${header(user, "dasbor")}<main class="page"><div class="wrap">
     <a class="back no-print" href="#/sesi/${s.id}">← Sesi</a>
@@ -113,7 +114,9 @@ export async function report({ user, params }) {
     <p class="page-sub">${res.length} dari ${s.roster.length} murid mengisi (${pct(res.length, s.roster.length)}%).</p>
     ${pct(res.length, s.roster.length) < 80 ? `<div class="notice">Baru ${pct(res.length, s.roster.length)}% yang mengisi. Gambaran kelas lebih tepat setelah 80% murid mengisi.</div>` : ""}
     <p class="muted small" style="margin-top:.4rem">Rahasia. Hanya untuk guru yang berwenang.</p>
-    <div class="rowflex no-print" style="margin-top:1.2rem"><button class="btn primary sm" id="rp-print">Cetak atau simpan PDF</button><button class="btn sm" id="rp-csv">Unduh CSV untuk Excel</button></div>
+    <div class="rowflex no-print" style="margin-top:1.2rem">${formal ? `<button class="btn primary sm" id="rp-docx">Unduh Word</button><button class="btn sm" id="rp-pdf">Unduh PDF</button>` : `<button class="btn primary sm" id="rp-print">Cetak atau simpan PDF</button>`}</div>
+    ${formal ? `<p class="muted small no-print" style="margin-top:.6rem;max-width:34rem">Laporan resmi dengan tanda tangan, siap dikirim ke guru BK, psikolog, atau kepala sekolah. Untuk PDF, pilih "Simpan sebagai PDF" di dialog cetak.</p>` : ""}
+    <div class="rowflex no-print" style="margin-top:.8rem"><button class="btn sm" id="rp-csv">Unduh CSV untuk Excel</button></div>
     ${r.body}
     <div class="print-sign"><p>${today}</p><p>${esc(user.role || "")}</p><p class="line">${esc(user.name || "")}</p></div>
   </div></main>`;
@@ -121,7 +124,11 @@ export async function report({ user, params }) {
     title: `Laporan ${a.name}, ${s.className}`, html,
     mount(root) {
       r.mount && r.mount(root);
-      $("#rp-print", root).addEventListener("click", () => window.print());
+      $("#rp-print", root)?.addEventListener("click", () => window.print());
+      const doc = () => buildDoc({ user, s, a, res, bodyHtml: r.body });
+      const safe = (fn) => () => { try { fn(); } catch (ex) { console.error(ex); toast("Laporan belum bisa dibuat: " + ex.message); } };
+      $("#rp-docx", root)?.addEventListener("click", safe(() => { const m = doc(); saveBlob(m.file + ".docx", docxBlob(m)); }));
+      $("#rp-pdf", root)?.addEventListener("click", safe(() => printDoc(doc())));
       $("#rp-csv", root).addEventListener("click", () => download(`examus-${a.id}-${s.className}.csv`.replace(/\s+/g, "-").toLowerCase(), toCSV(r.csv()), "text/csv"));
     },
   };
