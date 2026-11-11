@@ -67,14 +67,16 @@ export const PR_FORMS = PR_IDX.korban.map((i) => PR_ITEMS[i].form);
 
 // Klasifikasi mengikuti batas Solberg & Olweus (2003): mengalami atau melakukan perundungan bila setidaknya satu
 // bentuk terjadi "kadang-kadang" atau lebih dalam periode pengukuran (kira-kira 2-3 kali sebulan); "jarang" = pantau.
-// Ancaman atau kekerasan fisik pada tingkat itu didahulukan. Rasa aman = rata-rata 10 butir iklim (3 butir dibalik), 0-3.
+// Ancaman atau kekerasan fisik, walau hanya "jarang", langsung didahulukan (perlu perhatian segera) demi keselamatan. Rasa aman = rata-rata 10 butir iklim (3 butir dibalik), 0-3.
 export function prProfile(a) {
   const val = (i) => Number(a?.[i]) || 0, mx = (ids) => Math.max(0, ...ids.map(val));
   const adj = (i) => (PR_ITEMS[i].neg ? 3 - val(i) : val(i));
-  const serious = (k) => idx((x) => x.k === k && x.serious).some((i) => val(i) >= 2);
+  const serious = (k) => idx((x) => x.k === k && x.serious).some((i) => val(i) >= 1);
+  const sv = (k, form) => val(PR_ITEMS.findIndex((x) => x.k === k && x.form === form));
   const level = (ids, ser) => (ser ? "didahulukan" : mx(ids) >= 2 ? "perlu" : mx(ids) >= 1 ? "pantau" : "");
   const victim = level(PR_IDX.korban, serious("korban"));
   const doerRaw = level(PR_IDX.pelaku, serious("pelaku")), doer = doerRaw === "didahulukan" ? "perlu" : doerRaw;
+  const wmax = mx(PR_IDX.witness);
   const safe = PR_IDX.iklim.reduce((t, i) => t + adj(i), 0) / PR_IDX.iklim.length;
   const at = (id) => PR_IDX.at(id);
   return {
@@ -85,6 +87,9 @@ export function prProfile(a) {
     passive: mx(PR_IDX.passive) >= 2 ? "perlu" : mx(PR_IDX.passive) >= 1 ? "pantau" : "",
     safe, lowSafe: safe < 1.5, unsafe: adj(at("aman")) <= 1, noReport: adj(at("lapor")) <= 1, noTrust: adj(at("percaya")) <= 1,
     canDefend: adj(at("bela")) >= 2, adj,
+    doerSerious: doerRaw === "didahulukan", witLevel: wmax >= 3 ? 2 : wmax >= 2 ? 1 : 0,
+    threatened: sv("korban", "Ancaman") >= 1, hurt: sv("korban", "Kekerasan fisik") >= 1, threatens: sv("pelaku", "Ancaman") >= 1, hurts: sv("pelaku", "Kekerasan fisik") >= 1,
+    sums: { korban: PR_IDX.korban.reduce((s, i) => s + val(i), 0), pelaku: PR_IDX.pelaku.reduce((s, i) => s + val(i), 0), saksi: [...PR_IDX.witness, ...PR_IDX.passive].reduce((s, i) => s + val(i), 0), iklim: PR_IDX.iklim.reduce((s, i) => s + (3 - adj(i)), 0) },
   };
 }
 

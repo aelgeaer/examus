@@ -6,6 +6,7 @@ import { header } from "./pages-public.js";
 import { socioReport } from "./report-socio.js";
 import { minatReport, kekuatanReport, emosiReport, kepribadianReport, akpdReport } from "./report-more.js";
 import { amanReport } from "./report-aman.js";
+import { kekuatanReport2, emosiReport2, kepribadianReport2, akpdReport2 } from "./report-v2.js";
 
 const pct = (n, d) => (d ? Math.round((n / d) * 100) : 0);
 const bars = (rows, max) => `<div class="bars">${rows.map(([name, val, label]) => `<div class="b"><span class="nm">${esc(name)}</span><span class="track"><i style="width:${max ? (val / max) * 100 : 0}%"></i></span><span class="val">${esc(label ?? val)}</span></div>`).join("")}</div>`;
@@ -94,7 +95,7 @@ function kebutuhan(s, res) {
   return { body, csv: () => [["Pernyataan", "Bidang", "Murid", "Persen"], ...items.map((x) => [x.text, BIDANG[x.k], x.yes, pct(x.yes, n)]), [], ["No", "Nama", ...KEYS.map((k) => BIDANG[k]), "Total"], ...rows] };
 }
 
-const BUILD = { sosiometri: socioReport, "gaya-belajar": gaya, "minat-karier": minatReport, kebutuhan, kekuatan: kekuatanReport, emosi: emosiReport, kepribadian: kepribadianReport, akpd: akpdReport, aman: amanReport };
+const BUILD = { sosiometri: socioReport, "gaya-belajar": gaya, "minat-karier": minatReport, kebutuhan, kekuatan: kekuatanReport2, emosi: emosiReport2, kepribadian: kepribadianReport2, akpd: akpdReport2, aman: amanReport };
 
 export async function report({ user, params }) {
   const s = await store.getSession(params.id);
