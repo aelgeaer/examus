@@ -26,9 +26,9 @@ export function scaleFlow(pub, top) {
 
       const draw = () => {
         if (stage === "intro") {
-          const cards = def.intro(cfg), [h, p] = cards[introStep], last = introStep === cards.length - 1;
+          const cards = def.intro(cfg), [h, p, chips] = cards[introStep], last = introStep === cards.length - 1;
           main.innerHTML = `<p class="gb-eyebrow">${esc(pub.className)}</p><h1>${esc(def.heading)}</h1>
-            <div class="gb-card"><div class="n">${introStep + 1} / ${cards.length}</div><h2>${esc(h)}</h2><p>${esc(p)}</p></div>
+            <div class="gb-card"><div class="n">${introStep + 1} / ${cards.length}</div><h2>${esc(h)}</h2><p>${esc(p)}</p>${chips ? `<div class="achips">${chips.map((x) => `<span>${esc(x)}</span>`).join("")}</div>` : ""}</div>
             <div class="gb-dots" aria-hidden="true">${cards.map((_, i) => `<i class="${i === introStep ? "on" : ""}"></i>`).join("")}</div>
             <button class="btn primary block" id="gb-next">${last ? "Mulai" : "Lanjut"}</button>
             ${introStep ? `<button class="gb-ghost" id="gb-back">Kembali</button>` : ""}`;

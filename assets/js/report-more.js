@@ -120,18 +120,27 @@ export function kekuatanReport(s, res) {
       <tr><td>Kepedulian (kekuatan)</td>${[0, 1, 2, 3].map((l) => `<td class="num">${lvlCount("peduli", l)}</td>`).join("")}</tr></tbody></table></div>
     <p class="muted small" style="margin-top:.4rem">Untuk kepedulian, kolom dibaca: wajar, sedikit rendah, rendah, sangat rendah.</p>
     <h2 class="sec-h">Siapa diajak bicara lebih dulu</h2>
-    <div class="sumcards">${prio("Tinggi atau berdampak", "warn", high.map((r) => ({ name: r.name, note: `total ${r.p.total}${r.p.impact >= 2 ? ", sangat terganggu" : ""}` })), "Total kesulitan tinggi (18+), atau murid merasa cukup atau sangat terganggu.")}
+    <div class="sumcards">${prio("Tinggi atau berdampak", "warn", high.map((r) => ({ name: r.name, note: `total ${r.p.total}${r.p.impact >= 2 ? ", melaporkan kesulitan" : ""}` })), "Total kesulitan tinggi (20+), atau murid menjawab ya, kesulitan yang jelas atau berat.")}
       ${prio("Sering diganggu teman", "warn", bullied.map((r) => ({ name: r.name })), "Menjawab agak benar atau benar pada kalimat tentang diejek atau diganggu.")}
-      ${prio("Pantau", "", watch.map((r) => ({ name: r.name, note: `total ${r.p.total}` })), "Total sedikit meningkat (15-17), atau satu area tinggi.")}</div>
+      ${prio("Pantau", "", watch.map((r) => ({ name: r.name, note: `total ${r.p.total}` })), "Total sedikit meningkat (16-19), atau satu area tinggi.")}</div>
     <h2 class="sec-h">Kelompok bimbingan</h2>
     <p class="muted">Murid dengan area tinggi atau sangat tinggi.</p>
     <div class="ggroups" style="margin-top:.8rem">${DIFF.map((k) => `<div class="card"><p class="gh">${KK_AREAS[k]} <span class="muted">${groups[k].length}</span></p>${groups[k].length ? `<ul>${groups[k].map((r) => `<li><span>${esc(r.name)}</span><span class="muted small">${r.p.s[k]}/10</span></li>`).join("")}</ul>` : `<p class="muted">-</p>`}</div>`).join("")}
       <div class="card"><p class="gh">Kepedulian rendah <span class="muted">${lowCare.length}</span></p>${lowCare.length ? `<ul>${lowCare.map((r) => `<li><span>${esc(r.name)}</span><span class="muted small">${r.p.s.peduli}/10</span></li>`).join("")}</ul>` : `<p class="muted">-</p>`}</div></div>
     <h2 class="sec-h">Skor per murid</h2>
     ${tbl(["No", "Nama", ...Object.values(KK_AREAS).map((t) => ({ t, num: 1 })), { t: "Total", num: 1 }, "Dampak", "Catatan"], rows.map((r) => (r.filled
-      ? [r.no, r.name, ...ALL.map((k) => cell(r.p.s[k], k)), cell(r.p.total, "total"), ["Tidak", "Sedikit", "Cukup banyak", "Sangat banyak"][r.p.impact], [kkTotalLevel(r.p.total) ? `total ${kkLevelName(kkTotalLevel(r.p.total)).toLowerCase()}` : "", r.p.bullied ? "sering diganggu" : ""].filter(Boolean).join(", ") || "-"]
+      ? [r.no, r.name, ...ALL.map((k) => cell(r.p.s[k], k)), cell(r.p.total, "total"), ["Tidak", "Sedikit kesulitan", "Kesulitan jelas", "Kesulitan berat"][r.p.impact], [kkTotalLevel(r.p.total) ? `total ${kkLevelName(kkTotalLevel(r.p.total)).toLowerCase()}` : "", r.p.bullied ? "sering diganggu" : ""].filter(Boolean).join(", ") || "-"]
       : [r.no, r.name, ...ALL.map(() => "-"), "-", "-", "Belum mengisi"])))}
-    <p class="muted small" style="margin-top:.5rem">Tiap area 0-10 (5 kalimat, tidak benar 0, agak benar 1, benar 2). Total kesulitan = emosi + perilaku + fokus + pertemanan (0-40). Warna mengikuti empat pita: wajar, sedikit meningkat, tinggi, sangat tinggi. Batasnya mengikuti pembagian SDQ laporan diri usia 11-17: total 15/18/20, emosi 5/6/7, perilaku 4/5/6, fokus 6/7/8, pertemanan 3/4/5, kepedulian 5/4/3 ke bawah.</p>
+    <p class="muted small" style="margin-top:.5rem">Tiap area 0-10: 5 kalimat, tidak benar 0, agak benar 1, benar 2; lima butir berkode terbalik (nomor 9, 10, 15, 17, 22). Total kesulitan = emosi + perilaku + fokus + pertemanan (0-40). Empat pita (wajar, sedikit meningkat, tinggi, sangat tinggi) mengikuti tabel SDQ laporan diri usia 11-17: total 0-15 / 16-19 / 20-25 / 26-40; emosi 0-5 / 6 / 7 / 8-10; perilaku 0-3 / 4 / 5 / 6-10; fokus 0-5 / 6 / 7 / 8-10; pertemanan 0-2 / 3 / 4 / 5-10; kepedulian 6-10 / 5 / 4 / 0-3. Dampak = jawaban murid pada pertanyaan "apakah kamu sedang punya kesulitan".</p>
+    <h2 class="sec-h">Keterangan istilah</h2>
+    <dl class="gloss">
+      <dt>Emosi, perilaku, fokus, pertemanan, kepedulian</dt><dd>Lima area SDQ: gejala emosi, masalah perilaku, hiperaktivitas atau kurang perhatian, masalah dengan teman sebaya, dan perilaku prososial (peduli dan suka menolong). Empat area pertama mengukur kesulitan, jadi skor tinggi berarti lebih banyak kesulitan. Kepedulian mengukur kekuatan, jadi skor rendah yang perlu diperhatikan.</dd>
+      <dt>Total kesulitan</dt><dd>Jumlah skor emosi, perilaku, fokus, dan pertemanan (0-40). Kepedulian tidak ikut dihitung.</dd>
+      <dt>Butir berkode terbalik</dt><dd>Kalimat positif seperti "Aku punya setidaknya satu sahabat". Jawaban "benar" justru menurunkan skor kesulitan, sehingga nilainya dibalik (0 menjadi 2, 2 menjadi 0) sebelum dijumlahkan.</dd>
+      <dt>Wajar / sedikit meningkat / tinggi / sangat tinggi</dt><dd>Empat pita skor. Pada sampel normatif SDQ di Inggris, kira-kira 80% anak masuk wajar, 10% sedikit meningkat, 5% tinggi, dan 5% sangat tinggi. Pita bukan diagnosis; pita "tinggi" dan "sangat tinggi" berarti anak perlu dilihat lebih dekat.</dd>
+      <dt>Dampak</dt><dd>Jawaban murid atas pertanyaan apakah ia sedang punya kesulitan dengan perasaan, konsentrasi, perilaku, atau pertemanan: tidak, sedikit, jelas, atau berat. Ini baru pertanyaan pembuka dari suplemen dampak SDQ; pertanyaan lanjutan (lama, rasa terganggu, hambatan di rumah dan sekolah) belum ada, jadi skor dampak SDQ penuh belum bisa dihitung.</dd>
+      <dt>Sering diganggu</dt><dd>Murid menjawab agak benar atau benar pada kalimat "Aku sering diejek, diganggu, atau dijahili anak lain". Cocokkan dengan sosiometri atau deteksi perundungan.</dd>
+    </dl>
     ${unfilled(rows)}
     ${tips("Saran tindak lanjut", [
       "Temui murid di kotak \"tinggi atau berdampak\" secara pribadi minggu ini. Mulai dari kekuatannya, lalu tanyakan apa yang sedang berat.",
@@ -140,7 +149,7 @@ export function kekuatanReport(s, res) {
       "Libatkan orang tua bila kesulitan juga terasa di rumah.",
       "Rujuk ke psikolog bila kesulitan sangat tinggi, menetap, atau sangat mengganggu.",
     ])}
-    ${caveat("Ini skrining awal, bukan diagnosis. Strukturnya (lima area, skala 0-1-2, total kesulitan, dampak) dan batas pitanya mengikuti SDQ, tetapi butirnya ditulis untuk Examus, jadi batas itu hanya patokan sementara sampai ada norma lokal. Untuk keperluan klinis, pakai SDQ versi resmi berbahasa Indonesia (sdqinfo.org). Jangan tampilkan skor atau label kepada murid maupun teman sekelasnya.")}`;
+    ${caveat("Ini skrining awal, bukan diagnosis. Butir dan pembagian pita mengikuti SDQ (Strengths and Difficulties Questionnaire, hak cipta Robert Goodman, bebas dipakai non-komersial tanpa diubah). Pastikan kalimat yang dipakai sama dengan versi resmi berbahasa Indonesia di sdqinfo.org. Batas pita berasal dari sampel normatif Inggris, jadi belum tentu mewakili murid Indonesia; pakai sebagai patokan sementara dan padukan dengan wawancara. Jangan tampilkan skor atau label kepada murid maupun teman sekelasnya.")}`;
   return { body, csv: () => [["No", "Nama", "L/P", ...Object.values(KK_AREAS), "Total kesulitan", "Pita total", "Dampak"], ...rows.map((r) => (r.filled ? [r.no, r.name, r.g, ...ALL.map((k) => r.p.s[k]), r.p.total, kkLevelName(kkTotalLevel(r.p.total)), r.p.impact] : [r.no, r.name, r.g]))] };
 }
 

@@ -7,6 +7,10 @@ import { RIASEC, MINAT_ITEMS, GAYA_ITEMS, VAK } from "./data.js";
 import { radar } from "./charts.js";
 import { gayaProfile, donut, VAK_COLOR } from "./gaya.js";
 
+// Layanan bantuan untuk anak: Healing119 (Kemenkes) dan SAPA 129 (KemenPPPA). Periksa nomornya secara berkala.
+const TALK = `<div class="gb-tips"><h2>Mau cerita?</h2><p style="margin-top:.4rem">Guru BK dan wali kelasmu siap mendengar. Atau hubungi:</p>
+  <p style="margin-top:.7rem"><b style="font-weight:600">Healing119</b><br><span class="muted small">Teman bicara, gratis 24 jam: telepon <a href="tel:119">119</a> lalu tekan 8, atau <a href="https://healing119.id" target="_blank" rel="noopener">healing119.id</a></span></p>
+  <p style="margin-top:.7rem"><b style="font-weight:600">SAPA 129</b><br><span class="muted small">Kalau mengalami atau melihat kekerasan: telepon <a href="tel:129">129</a> atau WhatsApp <a href="https://wa.me/628111129129" target="_blank" rel="noopener">08111-129-129</a></span></p></div>`;
 const HELP = `<div class="gb-tips"><h2>Kalau butuh teman bicara</h2><ul><li>Ceritakan kepada guru BK, wali kelas, atau orang dewasa yang kamu percaya.</li><li>Kalau kamu atau temanmu dalam bahaya, segera minta tolong orang dewasa terdekat atau telepon 112.</li></ul></div>`;
 const thanks = (name, body = "") => `<p class="gb-eyebrow">Terima kasih, ${esc(name)}</p><h1>Jawabanmu sudah tersimpan.</h1><p class="lead" style="margin-top:.5rem">Hanya gurumu yang bisa melihat jawabanmu.</p>${body}`;
 
@@ -48,50 +52,45 @@ export function minatProfile(answers, cfg = {}) {
 
 /* ---------------- Kekuatan & kesulitan ---------------- */
 export const KK_AREAS = { emosi: "Emosi", perilaku: "Perilaku", fokus: "Fokus", teman: "Pertemanan", peduli: "Kepedulian" };
-const kk = (k, text) => ({ k, text });
+// 25 butir SDQ (Strengths and Difficulties Questionnaire, Robert Goodman) versi laporan diri, kalimat bahasa
+// Indonesia sesuai contoh yang diberikan pengguna. Urutan tampil mengikuti contoh; lima area SDQ: emosi,
+// perilaku (masalah perilaku), fokus (hiperaktivitas/kurang perhatian), teman (masalah teman sebaya),
+// peduli (perilaku prososial). rev = butir berkode terbalik (skor 2 - jawaban). Hak cipta SDQ ada pada
+// Robert Goodman; bebas dipakai non-komersial tanpa diubah. Cocokkan dengan versi resmi di sdqinfo.org.
+const kk = (k, text, rev = false) => ({ k, text, rev });
 export const KK_ITEMS = [
-  kk("peduli", "Aku memperhatikan perasaan orang lain."), kk("fokus", "Aku sulit duduk tenang dalam waktu lama."), kk("emosi", "Aku sering pusing, sakit perut, atau tidak enak badan."),
-  kk("peduli", "Aku senang berbagi makanan, mainan, atau alat tulis dengan teman."), kk("perilaku", "Kalau sedang marah, aku sulit menahan diri."), kk("teman", "Aku lebih sering sendirian daripada bersama teman."),
-  kk("perilaku", "Aku sering membantah orang dewasa."), kk("emosi", "Aku sering merasa khawatir."), kk("peduli", "Aku menolong kalau ada yang terluka, sedih, atau sakit."),
-  kk("fokus", "Tangan atau kakiku sering bergerak terus."), kk("teman", "Aku merasa sulit punya teman dekat."), kk("perilaku", "Aku sering bertengkar dengan teman."),
-  kk("emosi", "Aku sering merasa sedih atau ingin menangis."), kk("teman", "Teman-teman sering mengejek atau mengganggu aku."), kk("fokus", "Aku mudah teralih saat belajar."),
-  kk("emosi", "Aku mudah gugup di situasi baru."), kk("peduli", "Aku bersikap baik kepada adik atau teman yang lebih muda."), kk("perilaku", "Aku kadang berbohong agar tidak dimarahi."),
-  kk("teman", "Aku lebih akrab dengan orang dewasa daripada teman sebaya."), kk("peduli", "Aku sering menawarkan bantuan tanpa diminta."), kk("fokus", "Aku sering bertindak sebelum berpikir."),
-  kk("perilaku", "Aku pernah mengambil barang yang bukan milikku."), kk("teman", "Aku merasa tidak diterima di kelompok mana pun."), kk("emosi", "Aku punya banyak hal yang kutakuti."),
-  kk("fokus", "Aku sering tidak menyelesaikan tugas sampai tuntas."),
+  kk("peduli", "Aku memperhatikan perasaan orang lain"), kk("fokus", "Aku sulit duduk tenang dalam waktu lama"), kk("emosi", "Aku sering pusing, sakit perut, atau tidak enak badan"),
+  kk("perilaku", "Kalau sedang marah, aku sulit menahan diri"), kk("teman", "Aku lebih sering sendirian daripada bersama teman seusiaku"), kk("peduli", "Aku mau berbagi makanan, alat tulis, atau barang lain dengan teman"),
+  kk("fokus", "Tangan atau kakiku sering bergerak-gerak tanpa kusadari"), kk("emosi", "Banyak hal membuatku khawatir"), kk("perilaku", "Aku biasanya mengikuti aturan dan arahan guru atau orang tua", true),
+  kk("teman", "Aku punya setidaknya satu sahabat", true), kk("peduli", "Kalau ada yang terluka atau sedih, aku berusaha menolongnya"), kk("fokus", "Perhatianku mudah teralih ke hal lain"),
+  kk("emosi", "Aku sering merasa sedih atau ingin menangis"), kk("perilaku", "Aku sering bertengkar atau berkelahi dengan orang lain"), kk("teman", "Teman-teman seusiaku umumnya suka berteman denganku", true),
+  kk("peduli", "Aku bersikap baik kepada anak-anak yang lebih muda"), kk("fokus", "Aku berpikir dulu sebelum melakukan sesuatu", true), kk("emosi", "Di tempat atau keadaan baru, aku mudah gugup dan tidak percaya diri"),
+  kk("perilaku", "Aku cukup sering berbohong atau berbuat curang"), kk("teman", "Aku sering diejek, diganggu, atau dijahili anak lain"), kk("peduli", "Aku menawarkan bantuan kepada orang lain tanpa diminta"),
+  kk("fokus", "Aku bisa menyelesaikan tugas sampai tuntas", true), kk("emosi", "Aku mudah merasa takut"), kk("perilaku", "Aku pernah mengambil barang yang bukan milikku tanpa izin"),
+  kk("teman", "Aku lebih mudah akrab dengan orang dewasa daripada dengan teman seusiaku"),
 ];
-export const KK_BULLIED = KK_ITEMS.findIndex((it) => it.text.startsWith("Teman-teman sering mengejek"));
+export const KK_BULLIED = KK_ITEMS.findIndex((it) => it.text.startsWith("Aku sering diejek"));
+// Pertanyaan dampak (pintu masuk suplemen dampak SDQ): hanya pertanyaan pertama; pertanyaan lanjutan
+// (lama, rasa terganggu, hambatan di rumah/sekolah) belum ditanyakan, jadi skor dampak SDQ penuh belum ada.
+export const KK_IMPACT = { text: "Secara keseluruhan, apakah kamu merasa sedang punya kesulitan dengan perasaan, konsentrasi, perilaku, atau pertemanan?", options: [{ v: 0, t: "Tidak" }, { v: 1, t: "Ya, sedikit kesulitan" }, { v: 2, t: "Ya, kesulitan yang jelas" }, { v: 3, t: "Ya, kesulitan yang berat" }] };
 export function kkProfile(a) {
   const s = Object.fromEntries(Object.keys(KK_AREAS).map((k) => [k, 0]));
-  KK_ITEMS.forEach((it, i) => (s[it.k] += Number(a?.[i]) || 0));
+  KK_ITEMS.forEach((it, i) => { const v = Number(a?.[i]); if (Number.isNaN(v) || a?.[i] === undefined) return; s[it.k] += it.rev ? 2 - v : v; });
   return { s, total: s.emosi + s.perilaku + s.fokus + s.teman, impact: Number(a?.impact) || 0, bullied: Number(a?.[KK_BULLIED]) >= 1 };
 }
-// Empat pita mengikuti cara pembagian SDQ versi laporan diri usia 11-17 (sekitar 80% wajar, 10% sedikit
-// meningkat, 5% tinggi, 5% sangat tinggi pada sampel normatif Inggris). Butir Examus bukan butir SDQ,
-// jadi batas ini hanya patokan sementara sampai ada norma lokal. Tiap area 0-10, total kesulitan 0-40.
-const KK_CUT = { emosi: [5, 6, 7], perilaku: [4, 5, 6], fokus: [6, 7, 8], teman: [3, 4, 5] };
+// Empat pita mengikuti tabel SDQ laporan diri usia 11-17 (sdqinfo.org, sampel normatif Inggris):
+//   total 0-15 / 16-19 / 20-25 / 26-40;  emosi 0-5 / 6 / 7 / 8-10;  perilaku 0-3 / 4 / 5 / 6-10;
+//   fokus 0-5 / 6 / 7 / 8-10;  teman 0-2 / 3 / 4 / 5-10;  kepedulian 6-10 / 5 / 4 / 0-3.
+// Pita = wajar, sedikit meningkat, tinggi, sangat tinggi. Norma Inggris belum tentu berlaku di Indonesia;
+// pakai sebagai patokan sementara sampai ada norma lokal.
+const KK_CUT = { emosi: [6, 7, 8], perilaku: [4, 5, 6], fokus: [6, 7, 8], teman: [3, 4, 5] };
 export const KK_LEVELS = ["Wajar", "Sedikit meningkat", "Tinggi", "Sangat tinggi"];
 export const kkLevel = (score, area) => {
   if (area === "peduli") return score >= 6 ? 0 : score === 5 ? 1 : score === 4 ? 2 : 3;
   const c = KK_CUT[area]; return score >= c[2] ? 3 : score >= c[1] ? 2 : score >= c[0] ? 1 : 0;
 };
-export const kkTotalLevel = (t) => (t >= 20 ? 3 : t >= 18 ? 2 : t >= 15 ? 1 : 0);
+export const kkTotalLevel = (t) => (t >= 26 ? 3 : t >= 20 ? 2 : t >= 16 ? 1 : 0);
 export const kkLevelName = (lvl, area) => (area === "peduli" ? ["Wajar", "Sedikit rendah", "Rendah", "Sangat rendah"][lvl] : KK_LEVELS[lvl]);
-const KK_TIPS = {
-  emosi: "Kalau rasa khawatir atau sedih datang, coba tarik napas pelan-pelan dan ceritakan kepada orang yang kamu percaya.",
-  perilaku: "Saat mulai marah, coba diam dan hitung sampai sepuluh sebelum bicara atau bertindak.",
-  fokus: "Bagi tugas besar menjadi bagian kecil, dan istirahat sebentar setelah tiap bagian selesai.",
-  teman: "Coba ajak satu teman mengobrol tentang hal yang kalian sukai bersama.",
-  peduli: "Sapa satu teman yang jarang diajak bicara. Hal kecil seperti itu berarti banyak.",
-};
-const KK_STRENGTH = {
-  emosi: "Kamu cukup tenang menghadapi hal-hal yang terjadi di sekitarmu.",
-  perilaku: "Kamu bisa menjaga sikap dan menghormati aturan.",
-  fokus: "Kamu bisa menjaga perhatian dan menyelesaikan pekerjaanmu.",
-  teman: "Kamu punya teman dan merasa diterima di sekitarmu.",
-  peduli: "Kamu peduli dan suka menolong orang lain.",
-};
-
 /* ---------------- Suasana hati (PHQ-9) ---------------- */
 export const PHQ_ITEMS = [
   "merasa kurang tertarik atau kurang senang melakukan apa pun",
@@ -279,19 +278,29 @@ export const INSTR = {
     },
   },
   kekuatan: {
-    heading: "Tentang dirimu",
-    intro: () => [["Bagaimana kabarmu akhir-akhir ini?", `Ada ${KK_ITEMS.length} kalimat tentang dirimu dalam enam bulan terakhir. Pilih seberapa benar kalimat itu untukmu.`], ["Jawab dengan jujur", "Tidak ada jawaban yang benar atau salah. Jawabanmu membantu gurumu memahami dan mendukungmu."], ["Rahasia, hanya gurumu yang melihat", "Teman-temanmu tidak bisa melihat jawabanmu."]],
+    heading: "Bagaimana kabarmu belakangan ini?",
+    intro: () => [["Bagaimana kabarmu belakangan ini?", `Ada ${KK_ITEMS.length} kalimat tentang dirimu dalam enam bulan terakhir. Sekitar 7 menit.`], ["Pilih seberapa benar", "Tidak ada jawaban yang salah. Kalau ragu, pilih yang paling mendekati.", ["Tidak benar", "Agak benar", "Benar"]], ["Hanya gurumu yang membaca", "Guru BK atau wali kelasmu membacanya supaya bisa membantu. Teman-temanmu tidak bisa melihatnya."]],
     items: () => KK_ITEMS.map((it) => ({ text: it.text })),
-    ask: "Seberapa benar kalimat ini untukmu?",
+    stem: "Seberapa benar tentang dirimu?",
     options: () => [{ v: 0, t: "Tidak benar" }, { v: 1, t: "Agak benar" }, { v: 2, t: "Benar" }],
-    extra: () => [{ key: "impact", text: "Secara keseluruhan, apakah hal-hal tadi membuatmu kesulitan di rumah, di sekolah, atau dengan teman?", options: [{ v: 0, t: "Tidak" }, { v: 1, t: "Sedikit" }, { v: 2, t: "Cukup banyak" }, { v: 3, t: "Sangat banyak" }] }],
+    extra: () => [{ key: "impact", text: KK_IMPACT.text, options: KK_IMPACT.options }],
     result(a, cfg, name) {
-      const p = kkProfile(a);
-      const diff = ["emosi", "perilaku", "fokus", "teman"];
-      const strengths = [...(p.s.peduli >= 6 ? ["peduli"] : []), ...diff.filter((k) => p.s[k] <= 2)].slice(0, 2);
-      const tipArea = [...diff].sort((x, y) => p.s[y] - p.s[x])[0];
-      return thanks(name, `<div class="gb-tips"><h2>Kekuatanmu</h2><ul>${(strengths.length ? strengths : ["peduli"]).map((k) => `<li>${KK_STRENGTH[k]}</li>`).join("")}<li>Kamu mau jujur tentang dirimu, dan itu butuh keberanian.</li></ul></div>
-        <div class="gb-tips"><h2>Coba hal kecil ini</h2><ul><li>${KK_TIPS[p.s[tipArea] >= 4 ? tipArea : "peduli"]}</li></ul></div>${HELP}`);
+      const p = kkProfile(a), lv = (k) => kkLevel(p.s[k], k);
+      const CARDS = {
+        emosi: ["Perasaan", "Kamu bilang belakangan ini hatimu sering terasa berat, khawatir, atau takut. Perasaan seperti itu wajar dan bisa membaik, apalagi kalau tidak dipendam sendiri.", "Tarik napas pelan-pelan beberapa kali, lalu ceritakan perasaanmu kepada orang yang kamu percaya."],
+        perilaku: ["Marah dan aturan", "Kamu bilang belakangan ini sulit menahan marah atau sulit mengikuti aturan. Itu bisa dilatih, dan kamu tidak perlu menjalaninya sendirian.", "Saat mulai marah, berhenti sebentar dan hitung sampai sepuluh sebelum bicara atau bertindak."],
+        fokus: ["Tenang dan fokus", "Kamu bilang belakangan ini sulit duduk tenang atau menjaga perhatian. Banyak anak mengalaminya, dan ada cara yang membantu.", "Bagi tugas besar menjadi bagian kecil, lalu istirahat sebentar setelah tiap bagian selesai."],
+        teman: ["Teman dan pertemanan", p.bullied ? "Kamu bilang belakangan ini berteman tidak selalu mudah. Kamu layak punya teman yang baik, dan kalau ada yang mengganggumu, itu bukan salahmu." : "Kamu bilang belakangan ini berteman tidak selalu mudah. Kamu layak punya teman yang baik.", "Ajak satu teman mengobrol atau bekerja bersama minggu ini. Kalau ada yang mengejek atau mengganggu, ceritakan ke guru BK atau wali kelas."],
+      };
+      const shown = ["emosi", "perilaku", "fokus", "teman"].filter((k) => lv(k) >= 1 || (k === "teman" && p.bullied));
+      const strengths = [...(lv("peduli") === 0 ? ["Kamu peduli kepada orang lain dan suka menolong."] : []), ...(["emosi", "perilaku", "fokus", "teman"].filter((k) => lv(k) === 0).length >= 3 ? ["Di banyak hal, kamu merasa baik-baik saja belakangan ini."] : []), "Kamu mau jujur tentang dirimu, dan itu butuh keberanian."];
+      const concern = shown.length > 0 || kkTotalLevel(p.total) >= 1 || p.impact >= 2;
+      return `<p class="gb-eyebrow">Hasilmu</p><h1>Terima kasih sudah jujur, ${esc(name)}.</h1>
+        <p class="lead" style="margin-top:.6rem">Setiap orang punya kekuatan dan hal yang sedang terasa berat. Ini gambaran dari jawabanmu, bukan penilaian tentang dirimu.</p>
+        <div class="gb-tips"><h2>Kekuatanmu</h2><ul>${strengths.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>
+        ${shown.map((k) => `<div class="gb-tips"><h2>${CARDS[k][0]}</h2><p style="margin-top:.4rem">${CARDS[k][1]}</p><p style="margin-top:.5rem"><b style="font-weight:600">Coba:</b> ${CARDS[k][2]}</p></div>`).join("")}
+        ${TALK}
+        ${concern ? `<p class="muted" style="margin-top:1rem">Gurumu mungkin akan mengajakmu mengobrol. Itu bukan karena kamu salah, tapi karena ia peduli. Jawaban ini tidak memengaruhi nilaimu.</p>` : ""}`;
     },
   },
   emosi: {
