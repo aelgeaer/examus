@@ -4,6 +4,7 @@ import { getAssessment, VAK, GAYA_ITEMS, RIASEC, MINAT_ITEMS, BIDANG, KEBUTUHAN_
 import { gayaProfile, donut, VAK_COLOR } from "./gaya.js";
 import { header } from "./pages-public.js";
 import { socioReport } from "./report-socio.js";
+import { minatReport, kekuatanReport, emosiReport, kepribadianReport, akpdReport, amanReport } from "./report-more.js";
 
 const pct = (n, d) => (d ? Math.round((n / d) * 100) : 0);
 const bars = (rows, max) => `<div class="bars">${rows.map(([name, val, label]) => `<div class="b"><span class="nm">${esc(name)}</span><span class="track"><i style="width:${max ? (val / max) * 100 : 0}%"></i></span><span class="val">${esc(label ?? val)}</span></div>`).join("")}</div>`;
@@ -62,37 +63,6 @@ function gaya(s, res) {
   return { body, csv: () => [["No", "Nama", "L/P", "Visual (%)", "Auditori (%)", "Kinestetik (%)", "Gaya"], ...rows.map((r) => r.filled ? [r.no, r.name, r.g, r.p.pct.V, r.p.pct.A, r.p.pct.K, r.p.title] : [r.no, r.name, r.g, "", "", "", "Belum mengisi"])] };
 }
 
-/* ---------- Minat karier ---------- */
-function minat(s, res) {
-  const KEYS = Object.keys(RIASEC);
-  const byNo = new Map(res.map((r) => [r.no, r.answers || {}]));
-  const rows = s.roster.map((m) => {
-    const a = byNo.get(m.no); if (!a) return { ...m, filled: false };
-    const c = Object.fromEntries(KEYS.map((k) => [k, 0]));
-    MINAT_ITEMS.forEach((it, i) => (c[it.k] += Number(a[i]) || 0));
-    const order = [...KEYS].sort((x, y) => c[y] - c[x] || KEYS.indexOf(x) - KEYS.indexOf(y));
-    return { ...m, filled: true, c, code: order.slice(0, 3).join(""), top: order[0] };
-  });
-  const done = rows.filter((r) => r.filled);
-  const dist = KEYS.map((k) => [`${RIASEC[k].name} (${k})`, done.filter((r) => r.top === k).length]);
-  const best = [...KEYS].sort((a, b) => done.filter((r) => r.top === b).length - done.filter((r) => r.top === a).length)[0];
-  const body = `
-    <h2 class="sec-h">Minat tertinggi di kelas</h2>
-    <div class="card">${bars(dist.map(([g, v]) => [g, v, `${v} murid`]), Math.max(1, ...dist.map((d) => d[1])))}</div>
-    <h2 class="sec-h">Arti enam bidang minat</h2>
-    <div class="card"><ul class="tips">${KEYS.map((k) => `<li><strong>${RIASEC[k].name} (${k}).</strong> ${RIASEC[k].hint}</li>`).join("")}</ul></div>
-    <h2 class="sec-h">Hasil per murid</h2>
-    ${table(["No", "Nama", ...KEYS.map((k) => ({ t: k, num: 1 })), "Kode minat"], rows.map((r) => r.filled ? [r.no, r.name, ...KEYS.map((k) => r.c[k]), r.code] : [r.no, r.name, ...KEYS.map(() => "-"), "Belum mengisi"]))}
-    <p class="muted small" style="margin-top:.5rem">Skor tiap bidang 0 sampai 6. Kode minat adalah tiga bidang dengan skor tertinggi.</p>
-    ${tips([
-      `Bidang yang paling banyak menjadi minat utama: <strong>${RIASEC[best].name.toLowerCase()}</strong>. Pertimbangkan mengundang narasumber atau alumni dari bidang ini.`,
-      "Gunakan kode minat sebagai pembuka percakapan: tanyakan kegiatan apa yang membuat murid memilih jawabannya.",
-      "Minat masih berubah di usia sekolah. Ulangi angket setahun sekali dan bandingkan hasilnya bersama murid.",
-      "Skor yang rata di semua bidang biasanya berarti murid belum banyak mengenal pilihan. Mereka terbantu dengan kegiatan eksplorasi karier.",
-    ])}`;
-  return { body, csv: () => [["No", "Nama", "L/P", ...KEYS.map((k) => RIASEC[k].name), "Kode minat"], ...rows.map((r) => r.filled ? [r.no, r.name, r.g, ...KEYS.map((k) => r.c[k]), r.code] : [r.no, r.name, r.g, ...KEYS.map(() => ""), "Belum mengisi"])] };
-}
-
 /* ---------- Kebutuhan siswa ---------- */
 function kebutuhan(s, res) {
   const n = res.length, KEYS = Object.keys(BIDANG);
@@ -123,7 +93,7 @@ function kebutuhan(s, res) {
   return { body, csv: () => [["Pernyataan", "Bidang", "Murid", "Persen"], ...items.map((x) => [x.text, BIDANG[x.k], x.yes, pct(x.yes, n)]), [], ["No", "Nama", ...KEYS.map((k) => BIDANG[k]), "Total"], ...rows] };
 }
 
-const BUILD = { sosiometri: socioReport, "gaya-belajar": gaya, "minat-karier": minat, kebutuhan };
+const BUILD = { sosiometri: socioReport, "gaya-belajar": gaya, "minat-karier": minatReport, kebutuhan, kekuatan: kekuatanReport, emosi: emosiReport, kepribadian: kepribadianReport, akpd: akpdReport, aman: amanReport };
 
 export async function report({ user, params }) {
   const s = await store.getSession(params.id);
@@ -136,7 +106,7 @@ export async function report({ user, params }) {
   const html = `${header(user, "dasbor")}<main class="page"><div class="wrap">
     <a class="back no-print" href="#/sesi/${s.id}">← Sesi</a>
     <div class="print-head">${user.school ? `<p style="font-weight:600;font-size:14pt">${esc(user.school)}</p>` : ""}</div>
-    <p class="eyebrow">Laporan ${esc(a.name.toLowerCase())} · ${today}</p>
+    <p class="eyebrow">Laporan ${esc(a.title || a.name.toLowerCase())} · ${today}</p>
     <h1 class="page-title" style="margin-top:.2rem">${esc(s.className)}</h1>
     <p class="page-sub">${res.length} dari ${s.roster.length} murid mengisi (${pct(res.length, s.roster.length)}%).</p>
     ${pct(res.length, s.roster.length) < 80 ? `<div class="notice">Baru ${pct(res.length, s.roster.length)}% yang mengisi. Gambaran kelas lebih tepat setelah 80% murid mengisi.</div>` : ""}

@@ -3,6 +3,8 @@ import { store } from "./store.js";
 import { GAYA_ITEMS, MINAT_ITEMS, MINAT_SCALE, KEBUTUHAN_ITEMS, VAK } from "./data.js";
 import { gayaProfile, donut, VAK_COLOR } from "./gaya.js";
 import { socioFlow } from "./socio-flow.js";
+import { scaleFlow } from "./scale-flow.js";
+import { INSTR } from "./instruments.js";
 
 const top = `<div class="fill-top narrow"><span class="lockup"><img src="assets/img/logo.svg" alt="" width="36" height="36"><span class="words"><span class="name">Examus</span><span class="by">by prepod</span></span></span></div>`;
 const message = (title, text) => `<div class="fill">${top}<main class="fill-main narrow"><h1>${esc(title)}</h1><p class="page-sub">${esc(text)}</p></main></div>`;
@@ -14,7 +16,7 @@ function buildScreens(pub, me) {
     return (pub.config.questions || []).map((q) => ({ kind: "pick", key: q.id, title: q.text, hint: `Pilih paling banyak ${max} teman, mulai dari yang paling kamu pilih.`, max, options: pub.roster.filter((m) => m.no !== me).map((m) => ({ v: m.no, t: m.name })) }));
   }
   if (pub.type === "gaya-belajar") return GAYA_ITEMS.map((it, i) => ({ kind: "one", key: i, title: it.text, hint: "Pilih yang paling mirip denganmu.", options: it.options.map((_, j, arr) => arr[(j + i) % 3]).map((o) => ({ v: o.k, t: o.t })) }));
-  if (pub.type === "minat-karier") return MINAT_ITEMS.map((it, i) => ({ kind: "one", key: i, title: it.text, hint: "Seberapa tertarik kamu dengan kegiatan ini?", options: [...MINAT_SCALE].reverse().map((o) => ({ v: o.v, t: o.t })) }));
+  if (pub.type === "minat-karier") return MINAT_ITEMS.slice(0, 18).map((it, i) => ({ kind: "one", key: i, title: it.text, hint: "Seberapa tertarik kamu dengan kegiatan ini?", options: [...MINAT_SCALE].reverse().map((o) => ({ v: o.v, t: o.t })) }));
   if (pub.type === "kebutuhan") return KEBUTUHAN_ITEMS.map((it, i) => ({ kind: "one", key: i, title: it.text, hint: "Apakah pernyataan ini sesuai denganmu saat ini?", options: [{ v: true, t: "Ya, sesuai denganku" }, { v: false, t: "Tidak" }] }));
   return [];
 }
@@ -99,6 +101,8 @@ export async function student({ params }) {
 
   if (pub.type === "gaya-belajar") return gayaFlow(pub);
   if (pub.type === "sosiometri") return socioFlow(pub, top);
+  // Sesi minat karier lama (18 butir, skala 3) tetap memakai alur lama.
+  if (INSTR[pub.type] && !(pub.type === "minat-karier" && pub.config?.scale !== 5)) return scaleFlow(pub, top);
 
   return {
     title: `Angket ${pub.className}`,

@@ -501,3 +501,35 @@ a.opt.addq .d { margin-left: 0; }
 .tbl.matrix th, .tbl.matrix td { padding: .35rem .45rem; font-size: .85rem; }
 .tbl.matrix tr.tot td { font-weight: 600; background: var(--sky-soft); }
 @media (max-width: 640px) { .sumcards { grid-template-columns: 1fr; } }
+
+/* Halaman Mulai: kartu Tentang */
+.about { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; margin-top: .9rem; }
+.acard { background: var(--sky); border-radius: var(--r-l); padding: 1.3rem 1.3rem 1.4rem; }
+.acard .n { color: var(--blue-dark); font-size: .9rem; }
+.acard h3 { font-size: 1.25rem; margin-top: .5rem; }
+.acard p { margin-top: .5rem; }
+.achips { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .8rem; }
+.achips span { background: #fff; border-radius: 999px; padding: .3rem .75rem; font-size: .88rem; }
+.aex { display: grid; gap: .4rem; margin-top: .7rem; }
+.aex span { background: #fff; border-radius: 12px; padding: .55rem .8rem; font-size: .9rem; }
+#st-settings .opt input[type=checkbox] { accent-color: var(--blue); width: 18px; height: 18px; margin-right: .5rem; vertical-align: -3px; }
+@media (max-width: 640px) { .about { grid-template-columns: 1fr; } }
+
+/* Laporan asesmen skala */
+.gsum1 { margin-top: 1.4rem; }
+.gsum1 h2 { font-size: clamp(1.3rem, 3vw, 1.6rem); line-height: 1.25; }
+.plist { list-style: none; padding: 0; margin-top: .4rem; display: grid; gap: .3rem; }
+.plist li { display: flex; justify-content: space-between; gap: .6rem; }
+.ggroups.g3 { grid-template-columns: repeat(3, 1fr); }
+.tkgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: .5rem; margin-top: .8rem; }
+.tkgrid .cell { background: #fff; border-radius: 14px; padding: .7rem .8rem; min-height: 84px; }
+.tkgrid .cell.on { background: var(--sky); }
+.tkgrid .cell b { display: block; font-weight: 600; letter-spacing: .05em; }
+.tkgrid .cell span { font-size: 1.4rem; font-weight: 500; }
+.tkgrid .cell small { display: block; color: var(--ink-2); font-size: .8rem; line-height: 1.3; }
+.tksplit { display: grid; grid-template-columns: 11em 1fr 11em; gap: .7rem; align-items: center; font-size: .95rem; }
+.tksplit + .tksplit { margin-top: .7rem; }
+.tksplit span:last-child { text-align: right; }
+.tksplit .bar { height: 18px; background: var(--sun); border-radius: 999px; overflow: hidden; }
+.tksplit .bar i { display: block; height: 100%; background: var(--blue); }
+@media (max-width: 640px) { .ggroups.g3 { grid-template-columns: 1fr; } .tkgrid { grid-template-columns: repeat(2, 1fr); } .tksplit { grid-template-columns: 1fr; } .tksplit span:last-child { text-align: left; } }

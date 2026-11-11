@@ -2,7 +2,7 @@
 
 Platform asesmen psikologi untuk sekolah. Guru BK dan psikolog sekolah membuat sesi, membagikan link ke murid, murid mengisi dari HP tanpa akun, dan laporan tersusun otomatis.
 
-Asesmen yang sudah berjalan: sosiometri (dengan sosiogram interaktif), gaya belajar, minat karier (RIASEC), dan kebutuhan siswa.
+Asesmen yang sudah berjalan: gaya belajar, sosiometri (dengan sosiogram interaktif dan angket buatan guru), minat karier (RIASEC), kekuatan & kesulitan, suasana hati (PHQ-9), tipe kepribadian, AKPD (SMP dan SMA), dan deteksi perundungan. Semua butir ditulis untuk Examus kecuali PHQ-9 (bebas dipakai), dan belum ada yang divalidasi secara psikometrik untuk versi ini.
 
 ## Cara kerja akun
 

@@ -9,7 +9,7 @@ export function header(user, active = "") {
     ? `<a href="#/blog"${on("blog")}>Blog</a><a href="#/daftar"${on("daftar")}>Daftar</a><a class="pill" href="#/masuk">Masuk</a>`
     : user.isSuper
         ? `<a href="#/admin"${on("admin")}>Admin</a><a href="#/kelas"${on("kelas")}>Kelas</a>`
-        : `<a href="#/dasbor"${on("dasbor")}>Dasbor</a><a href="#/kelas"${on("kelas")}>Kelas</a><a href="#/angket"${on("angket")}>Angket</a>${user.isAdmin ? `<a href="#/admin"${on("admin")}>Admin</a>` : ""}`;
+        : `<a href="#/dasbor"${on("dasbor")}>Dasbor</a><a href="#/kelas"${on("kelas")}>Kelas</a>${user.isAdmin ? `<a href="#/admin"${on("admin")}>Admin</a>` : ""}`;
   const menu = user ? `<details class="usermenu"><summary aria-label="Menu akun"><span class="avatar" aria-hidden="true">${esc((user.name || user.username || "?").trim().charAt(0).toUpperCase())}</span><span class="who"><b>${esc(user.name || user.username)}</b><span>${esc(user.username)}</span></span><span class="caret" aria-hidden="true">▾</span></summary>
       <div class="menu" role="menu"><a role="menuitem" href="#/akun"${on("akun")}>Pengaturan akun</a><button type="button" role="menuitem" data-logout>Keluar</button></div></details>` : "";
   const nav = links + menu;
@@ -92,7 +92,7 @@ export function landing({ user }) {
 
   <section class="section catalogue" id="asesmen" aria-labelledby="cat-h"><div class="wrap">
     <h2 id="cat-h">Asesmen yang tersedia.</h2>
-    <ul>${ASSESSMENTS.map((a) => `<li class="cat ${a.tone}">${ICONS[a.id]}<span class="nm">${esc(a.name)}</span><p>${esc(a.long)}</p>${a.ready ? "" : '<span class="soon">Segera hadir</span>'}<span class="who">${esc(a.who)}</span></li>`).join("")}</ul>
+    <ul>${ASSESSMENTS.filter((a) => !a.hidden).map((a) => `<li class="cat ${a.tone}">${ICONS[a.id]}<span class="nm">${esc(a.name)}</span><p>${esc(a.long)}</p>${a.ready ? "" : '<span class="soon">Segera hadir</span>'}<span class="who">${esc(a.who)}</span></li>`).join("")}</ul>
   </div></section>
 
   <section class="section faq" aria-labelledby="faq-h"><div class="wrap">

@@ -26,9 +26,9 @@ export async function questionnaires({ user }) {
     <div class="rowflex" style="margin-top:.9rem">${own
       ? `<a class="btn sm" href="#/angket/${id}">Ubah</a><a class="btn sm" href="#/mulai/sosiometri?angket=${id}">Pakai</a><button class="btn sm danger" data-del="${id}">Hapus</button>`
       : `<a class="btn sm" href="#/mulai/sosiometri?angket=${id}">Pakai</a><a class="btn sm" href="#/angket/baru?dari=${id}">Salin lalu ubah</a>`}</div></div>`;
-  const html = `${header(user, "angket")}<main class="page"><div class="narrow">
-    <a class="back" href="#/dasbor">← Dasbor</a>
-    <div class="spread"><h1 class="page-title">Angket</h1><a class="btn primary" href="#/angket/baru">Buat angket</a></div>
+  const html = `${header(user, "dasbor")}<main class="page"><div class="narrow">
+    <a class="back" href="#/mulai/sosiometri">← Mulai sosiometri</a>
+    <div class="spread"><h1 class="page-title">Angket sosiometri</h1><a class="btn primary" href="#/angket/baru">Buat angket</a></div>
     <p class="page-sub">Angket adalah daftar pertanyaan sosiometri yang dipakai saat memulai sesi. Angket siap pakai bisa disalin lalu diubah sesuai kebutuhan.</p>
     ${mine.length ? `<h2 class="sec-h">Angket saya</h2><div class="stack">${mine.map((q) => card(q.id, q.name, q.config, true)).join("")}</div>` : ""}
     <h2 class="sec-h">Siap pakai</h2>
@@ -67,15 +67,15 @@ export async function questionnaireView({ user, params, query }) {
 export async function questionnaireEdit({ user, params, query }) {
   const isNew = params.id === "baru";
   const src = isNew ? (query.get("dari") ? await findQuestionnaire(query.get("dari")) : null) : await findQuestionnaire(params.id);
-  if (!isNew && (!src || !src.own)) return { html: `${header(user, "angket")}<main class="page"><div class="narrow"><h1 class="page-title">Angket tidak ditemukan</h1><p style="margin-top:1rem"><a class="btn" href="#/angket">Ke daftar angket</a></p></div></main>` };
+  if (!isNew && (!src || !src.own)) return { html: `${header(user, "dasbor")}<main class="page"><div class="narrow"><h1 class="page-title">Angket tidak ditemukan</h1><p style="margin-top:1rem"><a class="btn" href="#/angket">Ke daftar angket</a></p></div></main>` };
   const next = query.get("lanjut") || "";
   let name = isNew ? (src ? `${src.name} (salinan)` : "") : src.name;
   let maxPick = src?.config.maxPick || 3, reasons = src ? !!src.config.reasons : true;
   let qs = src ? src.config.questions.map((q) => ({ ...q })) : [];
   let area = "Sosial";
 
-  const html = `${header(user, "angket")}<main class="page"><div class="narrow">
-    <a class="back" href="${next ? "#" + next : "#/angket"}">← ${next ? "Kembali" : "Angket"}</a>
+  const html = `${header(user, "dasbor")}<main class="page"><div class="narrow">
+    <a class="back" href="${next ? "#" + next : "#/angket"}">← ${next ? "Kembali" : "Angket sosiometri"}</a>
     <h1 class="page-title">${isNew ? "Buat angket" : "Ubah angket"}</h1>
     <label class="field"><span>Nama angket</span><input type="text" id="a-name" maxlength="60" placeholder="Misalnya: Awal semester kelas 7" value="${esc(name)}"></label>
     <div class="field"><span class="flabel">Paling banyak teman yang dipilih per pertanyaan</span>

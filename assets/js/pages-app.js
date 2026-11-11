@@ -1,11 +1,11 @@
 import { esc, $, $$, toast, go, fmtDate, fmtShort, parseRoster, homePath, genPassword, suggestUsername, studentLink } from "./util.js";
 import { store, isOpen } from "./store.js";
-import { ASSESSMENTS, ICONS, getAssessment, SOCIO_VARIANTS, GAYA_ITEMS, MINAT_ITEMS, KEBUTUHAN_ITEMS } from "./data.js";
+import { ICONS, getAssessment, SOCIO_VARIANTS, visibleAssessments } from "./data.js";
+const ASSESSMENTS = visibleAssessments();
 import { header } from "./pages-public.js";
 import { socioSummary } from "./socio-data.js";
 
 const ROLES = ["Guru BK", "Psikolog sekolah", "Wali kelas", "Guru mata pelajaran", "Kepala sekolah", "Lainnya"];
-const itemCount = (type, config) => type === "sosiometri" ? (config.questions || []).length : { "gaya-belajar": GAYA_ITEMS.length, "minat-karier": MINAT_ITEMS.length, kebutuhan: KEBUTUHAN_ITEMS.length }[type];
 
 /* ---------------- Kenalan (onboarding) ---------------- */
 export function onboarding({ user }) {
@@ -72,7 +72,6 @@ export async function dashboard({ user }) {
       ? `<a href="#/mulai/${a.id}"${i >= 3 ? ' class="more"' : ""}>${ICONS[a.id]}<span><b>${esc(a.name)}</b><small>${esc(a.long)}</small></span><span class="go" aria-hidden="true">→</span></a>`
       : `<a class="off${i >= 3 ? " more" : ""}" aria-disabled="true" tabindex="-1">${ICONS[a.id]}<span><b>${esc(a.name)}</b><small>Segera hadir. ${esc(a.short)}</small></span><span></span></a>`)).join("")}</div>
     ${ASSESSMENTS.length > 3 ? `<button class="btn" id="astart-toggle" style="margin-top:.8rem" aria-expanded="false">Lihat semua asesmen (${ASSESSMENTS.length})</button>` : ""}
-    <p style="margin-top:.6rem"><a class="small" href="#/angket">Kelola angket sosiometri →</a></p>
     <h2 class="sec-h">Sesi Anda</h2>
     ${sessions.length ? `<div class="list">${sessions.map(sessionItem).join("")}</div>` : `<div class="card"><p>Belum ada sesi. Pilih salah satu asesmen di atas, atau lihat dulu contoh laporan dari kelas yang sudah terisi.</p></div>`}
     <div class="rowflex" style="margin-top:1rem">
@@ -199,6 +198,29 @@ export async function classEdit({ user, params, query }) {
 }
 
 /* ---------------- Mulai sesi ---------------- */
+// Pengaturan tambahan per asesmen: persetujuan, versi PHQ, atau jenjang AKPD.
+function settingsHtml(a) {
+  const consent = () => `<label class="opt"><input type="checkbox" id="st-consent"><span class="t">Murid dan orang tua/wali sudah diberi tahu</span><span class="d">${esc(a.consentText || "")}</span></label>`;
+  const note = a.consentNote ? `<p class="muted small" style="margin-top:.6rem">${esc(a.consentNote)}</p>` : "";
+  if (a.settings === "consent") return `<div id="st-settings">${consent()}${note}</div>`;
+  if (a.settings === "phq") return `<div id="st-settings">
+    <label class="opt"><input type="radio" name="phq" value="phq9" checked><span class="t">PHQ-9 lengkap, 9 pertanyaan</span><span class="d">Termasuk nomor 9 tentang pikiran menyakiti diri. Pilih ini bila guru BK atau psikolog sekolah bisa menemui murid yang menjawab "ya" pada hari yang sama.</span></label>
+    <label class="opt"><input type="radio" name="phq" value="phq8"><span class="t">Tanpa nomor 9 (PHQ-8)</span><span class="d">Batas skor sama. Pilih ini bila belum ada yang bisa menindaklanjuti di hari yang sama; tetap tanyakan keselamatan saat berbicara dengan murid yang skornya tinggi.</span></label>
+    ${consent()}${note}</div>`;
+  if (a.settings === "jenjang") return `<div id="st-settings">
+    <label class="opt"><input type="radio" name="jenjang" value="smp"><span class="t">SMP/MTs, kelas VII-IX</span></label>
+    <label class="opt"><input type="radio" name="jenjang" value="sma"><span class="t">SMA/SMK/MA, kelas X-XII</span></label></div>`;
+  return "";
+}
+function settingsConfig(a, root) {
+  const c = { v: 2 };
+  if (a.id === "minat-karier") c.scale = 5;
+  if (a.settings === "consent" || a.settings === "phq") c.consentAt = new Date().toISOString();
+  if (a.settings === "phq") c.variant = $('input[name="phq"]:checked', root).value;
+  if (a.settings === "jenjang") c.jenjang = $('input[name="jenjang"]:checked', root).value;
+  return c;
+}
+
 const ymd = (ms) => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 const DEADLINES = [[1, "1 hari"], [3, "3 hari"], [7, "1 minggu"], [14, "2 minggu"], [30, "30 hari"]];
 export async function start({ user, params, query }) {
@@ -211,23 +233,27 @@ export async function start({ user, params, query }) {
   const preQ = qsets.find((x) => x.id === query.get("angket"))?.id || "lengkap";
   const html = `${header(user, "dasbor")}<main class="page"><div class="narrow">
     <a class="back" href="#/dasbor">← Dasbor</a>
-    <h1 class="page-title">Mulai ${esc(a.name.toLowerCase())}</h1>
+    <h1 class="page-title">Mulai ${esc(a.title || a.name.toLowerCase())}</h1>
     <p class="page-sub">${esc(a.long)}</p>
     <h2 class="sec-h">Untuk kelas mana?</h2>
     ${list.length ? `<div class="chips" role="radiogroup" aria-label="Kelas">${list.map((c) => `<label><input type="radio" name="kelas" value="${c.id}"${c.id === pre ? " checked" : ""}><span>${esc(c.name)} (${c.members.length})</span></label>`).join("")}</div>
       <p style="margin-top:.7rem"><a class="btn sm" href="#/kelas/baru?lanjut=/mulai/${a.id}">+ Tambah kelas lain</a></p>`
       : `<div class="card"><p>Belum ada kelas. Tempel daftar nama murid dulu, lalu kembali ke sini.</p></div><p style="margin-top:.7rem"><a class="btn primary" href="#/kelas/baru?lanjut=/mulai/${a.id}">Buat daftar kelas</a></p>`}
-    <h2 class="sec-h">${socio ? "Pertanyaan apa yang diajukan?" : "Isi angket"}</h2>
+    ${socio || a.settings ? `<h2 class="sec-h">${socio ? "Pertanyaan apa yang diajukan?" : "Pengaturan"}</h2>` : ""}
     ${socio ? `<p class="muted small">Lengkap: dua pertanyaan per bidang BK. Simpel: satu per bidang. Untuk tiap pertanyaan, murid memilih maksimal beberapa teman dan menyebutkan alasannya.</p>
       <div style="margin-top:.8rem">${qsets.map((v) => `<label class="opt"><input type="radio" name="variant" value="${esc(v.id)}"${v.id === preQ ? " checked" : ""}><span class="t">${esc(v.name)}</span><span class="d">${esc(socioSummary(v.config))}</span><a class="qlink" href="#/angket/lihat/${esc(v.id)}">Lihat ${v.config.questions.length} pertanyaannya →</a></label>`).join("")}
-      <a class="opt addq" href="#/angket/baru?lanjut=/mulai/sosiometri"><span class="t">+ Tulis pertanyaan sendiri</span><span class="d">Angket Anda nanti muncul di daftar ini.</span></a></div>`
-      : `<div class="card"><p>${itemCount(a.id, {})} butir, satu butir per layar. Murid membuka link dari Anda, memilih namanya, lalu mengetuk jawaban yang paling sesuai. Kira-kira 5 menit.</p></div>`}
+      <a class="opt addq" href="#/angket/baru?lanjut=/mulai/sosiometri"><span class="t">+ Tulis pertanyaan sendiri</span><span class="d">Angket Anda nanti muncul di daftar ini.</span></a></div>
+      <p style="margin-top:.7rem"><a class="small" href="#/angket">Kelola angket saya →</a></p>`
+      : settingsHtml(a)}
     <h2 class="sec-h">Batas pengisian</h2>
     <div class="seg" role="radiogroup" aria-label="Batas pengisian">${DEADLINES.map(([d, t]) => `<label><input type="radio" name="days" value="${d}"${d === 14 ? " checked" : ""}><span>${t}</span></label>`).join("")}<label><input type="radio" name="days" value="custom"><span>Pilih tanggal</span></label></div>
     <label class="field hide" id="st-custom" style="margin-top:.8rem;max-width:260px"><span>Ditutup pada tanggal</span><input type="date" id="st-date" min="${ymd(Date.now() + 86400000)}" max="${ymd(Date.now() + 90 * 86400000)}"><span class="hint">Ditutup pukul 23.59 pada tanggal itu. Maksimal 90 hari dari sekarang.</span></label>
     <p class="muted small" id="st-until" style="margin-top:.6rem"></p>
+    ${a.about ? `<h2 class="sec-h">Tentang ${esc(a.name)}</h2>
+    <div class="about">${a.about.map((c, i) => `<div class="acard"><p class="n">${i + 1} / ${a.about.length}</p><h3>${esc(c.h)}</h3><p>${esc(c.p)}</p>${c.chips ? `<div class="achips">${c.chips.map((x) => `<span>${esc(x)}</span>`).join("")}</div>` : ""}${c.ex ? `<div class="aex">${c.ex.map((x) => `<span>${esc(x)}</span>`).join("")}</div>` : ""}</div>`).join("")}</div>` : ""}
     <p class="err" id="st-err" role="alert"></p>
-    <button class="btn primary block" id="st-go"${list.length ? "" : " disabled"}>Mulai sesi</button>
+    <button class="btn primary block" id="st-go" style="margin-top:1.6rem"${list.length ? "" : " disabled"}>Mulai sesi</button>
+    <p class="muted small" id="st-need" style="text-align:center;margin-top:.5rem"></p>
   </div></main>`;
   return {
     title: "Mulai " + a.name, html,
@@ -244,12 +270,17 @@ export async function start({ user, params, query }) {
         $("#st-until", root).textContent = dl ? `Pengisian ditutup otomatis ${fmtDate(dl.at, true)}. Anda bisa menutupnya lebih awal.` : "Pilih tanggal penutupan.";
       };
       $("#st-date", root).addEventListener("input", until);
+      // Pengaturan wajib (persetujuan, jenjang) harus diisi sebelum sesi bisa dimulai.
+      const need = () => (a.settings === "consent" && !$("#st-consent", root).checked ? "Centang pernyataan di atas dulu." : a.settings === "phq" && !$("#st-consent", root).checked ? "Centang pernyataan di atas dulu." : a.settings === "jenjang" && !$('input[name="jenjang"]:checked', root) ? "Pilih jenjang dulu." : "");
+      const gate = () => { const msg = need(); $("#st-need", root).textContent = list.length ? msg : ""; $("#st-go", root).disabled = !list.length || !!msg; };
+      $$("#st-settings input", root).forEach((x) => x.addEventListener("change", gate)); gate();
       $$(".qlink", root).forEach((l) => l.addEventListener("click", () => { const k = $('input[name="kelas"]:checked', root)?.value; if (k) l.href = l.getAttribute("href").split("?")[0] + "?kelas=" + k; }));
       $$('input[name="days"]', root).forEach((r) => r.addEventListener("change", until)); until();
       $("#st-go", root).addEventListener("click", async (e) => {
         const classId = $('input[name="kelas"]:checked', root)?.value;
         if (!classId) { $("#st-err", root).textContent = "Pilih kelas lebih dulu."; return; }
-        const config = socio ? (() => { const v = qsets.find((x) => x.id === $('input[name="variant"]:checked', root).value); return { variant: v.id, name: v.name, maxPick: v.config.maxPick || 3, reasons: !!v.config.reasons, questions: v.config.questions }; })() : {};
+        if (need()) { $("#st-err", root).textContent = need(); return; }
+        const config = !socio ? settingsConfig(a, root) : (() => { const v = qsets.find((x) => x.id === $('input[name="variant"]:checked', root).value); return { variant: v.id, name: v.name, maxPick: v.config.maxPick || 3, reasons: !!v.config.reasons, questions: v.config.questions }; })();
         const dl = deadline();
         if (!dl) { $("#st-err", root).textContent = "Pilih tanggal penutupan."; return; }
         if (dl.at <= Date.now()) { $("#st-err", root).textContent = "Tanggal penutupan harus di masa depan."; return; }
