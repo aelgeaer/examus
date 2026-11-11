@@ -282,7 +282,17 @@ export function akpdReport(s, res) {
     <h2 class="sec-h">Skor per murid</h2>
     ${tbl(["No", "Nama", ...KEYS.map((k) => ({ t: AKPD_BIDANG[k] + " (%)", num: 1 })), "Bidang utama"], rows.map((r) => (r.filled ? [r.no, r.name, ...KEYS.map((k) => r.p.pct[k]), AKPD_BIDANG[r.p.order[0]]] : [r.no, r.name, ...KEYS.map(() => "-"), "Belum mengisi"])))}
     ${unfilled(rows)}
-    ${caveat("Butir AKPD ini ditulis untuk Examus (10 kebutuhan per bidang layanan BK) dan bisa dipakai sebagai dasar menyusun program BK. Cocokkan dengan pengamatan dan data sekolah lain.")}`;
+    <h2 class="sec-h">Keterangan istilah</h2>
+    <dl class="gloss">
+      <dt>Bidang layanan BK</dt><dd>Empat bidang: pribadi (mengenal dan mengelola diri), sosial (hubungan dengan orang lain), belajar, dan karier. Tiap bidang berisi ${items.length / 4} kebutuhan.</dd>
+      <dt>Murid yang butuh bantuan</dt><dd>Murid yang menjawab "butuh bantuan" atau "sangat butuh bantuan" pada sebuah butir. "Sedikit butuh bantuan" tidak dihitung.</dd>
+      <dt>Persen kebutuhan</dt><dd>Murid yang butuh bantuan dibagi murid yang sudah mengisi, untuk satu butir.</dd>
+      <dt>Bimbingan klasikal dan kelompok</dt><dd>Butir yang dibutuhkan 50% murid atau lebih menjadi topik bimbingan klasikal (satu kelas). Butir yang dibutuhkan 25% sampai kurang dari 50% menjadi topik bimbingan kelompok. Butir di bawah itu ditangani lewat layanan individual bila perlu. Batas ini patokan Examus.</dd>
+      <dt>Kebutuhan kelas per bidang</dt><dd>Rata-rata persen kebutuhan semua butir dalam satu bidang. Dipakai untuk melihat bidang mana yang paling ramai dibutuhkan di kelas.</dd>
+      <dt>Skor bidang murid (%)</dt><dd>Jumlah nilai butir sebuah bidang dibagi nilai tertinggi yang mungkin (tiap butir 0 sampai 3). 100% berarti semua butir bidang itu dijawab "sangat butuh bantuan".</dd>
+      <dt>Murid yang perlu diajak bicara lebih dulu</dt><dd>Murid yang jumlah nilainya mencapai separuh nilai tertinggi atau lebih. Ini urutan menemui murid, bukan penilaian tentang murid.</dd>
+    </dl>
+    ${caveat("Butir AKPD ini ditulis untuk Examus (" + (items.length / 4) + " kebutuhan per bidang layanan BK) dan bisa dipakai sebagai dasar menyusun program BK. Batas 50% (klasikal) dan 25% (kelompok) adalah patokan Examus, bukan norma baku. Cocokkan dengan pengamatan dan data sekolah lain.")}`;
   return { body, csv: () => [["No", "Kebutuhan", "Bidang", "Murid", "Persen"], ...need.map((x) => [x.i + 1, x.text, AKPD_BIDANG[x.k], x.n, x.p]), [], ["No", "Nama", "L/P", ...KEYS.map((k) => AKPD_BIDANG[k] + " (%)")], ...rows.map((r) => (r.filled ? [r.no, r.name, r.g, ...KEYS.map((k) => r.p.pct[k])] : [r.no, r.name, r.g]))] };
 }
 

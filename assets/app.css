@@ -595,3 +595,10 @@ dialog.sheet::backdrop { background: rgba(12, 35, 64, .45); }
 .tk16 span { background: var(--sky-soft); border-radius: 12px; padding: .55rem 0; text-align: center; font-size: .9rem; letter-spacing: .04em; }
 .tk16 span.me { background: var(--blue); color: #fff; font-weight: 600; }
 @media (max-width: 460px) { .tkline { grid-template-columns: 1fr; } .tkline .r, .tkline .l { text-align: left; } }
+
+/* Hasil AKPD murid */
+.akb .b { display: grid; grid-template-columns: 5.5em 1fr; gap: .8rem; align-items: center; font-size: 1rem; }
+.akb .b + .b { margin-top: .7rem; }
+.akb .track { height: 14px; background: var(--sky); border-radius: 999px; overflow: hidden; }
+.akb .track i { display: block; height: 100%; background: var(--sky-mid); border-radius: 999px; }
+.akb .track i.top { background: var(--blue-dark); }

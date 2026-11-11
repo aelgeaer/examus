@@ -248,6 +248,7 @@ export function tkProfile(a) {
 /* ---------------- AKPD ---------------- */
 export const AKPD_BIDANG = { pribadi: "Pribadi", sosial: "Sosial", belajar: "Belajar", karier: "Karier" };
 const ak = (k, smp, sma) => ({ k, smp, sma: sma || smp });
+// 60 butir (15 per bidang). Sesi lama tanpa cfg.n hanya memakai 40 butir pertama.
 const AKPD_RAW = [
   ak("pribadi", "Mengenali kelebihan dan kekurangan diri"), ak("sosial", "Berkomunikasi dengan baik kepada orang lain"), ak("belajar", "Menemukan cara belajar yang paling cocok"), ak("karier", "Mengenali minat dan bakat diri"),
   ak("pribadi", "Menumbuhkan rasa percaya diri"), ak("sosial", "Memulai pertemanan baru"), ak("belajar", "Berkonsentrasi saat pelajaran"), ak("karier", "Mengetahui berbagai macam pekerjaan"),
@@ -259,8 +260,19 @@ const AKPD_RAW = [
   ak("pribadi", "Mengambil keputusan untuk diri sendiri"), ak("sosial", "Menghadapi ejekan atau perundungan"), ak("belajar", "Mengejar pelajaran yang tertinggal"), ak("karier", "Mengetahui perbedaan SMA, SMK, dan MA", "Mengetahui jalur masuk perguruan tinggi"),
   ak("pribadi", "Memahami perubahan diri di masa remaja", "Memahami diri menjelang dewasa"), ak("sosial", "Menjaga hubungan baik dengan orang tua"), ak("belajar", "Mengerjakan tugas tepat waktu"), ak("karier", "Mengenal pekerjaan orang-orang di sekitarku", "Mempersiapkan diri untuk bekerja atau berwirausaha"),
   ak("pribadi", "Menggunakan HP dan media sosial dengan bijak"), ak("sosial", "Bergaul secara sehat dengan lawan jenis"), ak("belajar", "Memilih kegiatan ekstrakurikuler yang cocok", "Memilih mata pelajaran pilihan yang cocok"), ak("karier", "Mengetahui sekolah lanjutan di daerahku", "Mencari informasi beasiswa"),
+  ak("pribadi", "Mengenali dan menamai perasaan yang sedang kurasakan"), ak("sosial", "Meminta maaf dan memaafkan teman"), ak("belajar", "Memahami bacaan atau soal yang panjang"), ak("karier", "Mengetahui kekuatanku yang berkaitan dengan pekerjaan"),
+  ak("pribadi", "Bangkit kembali setelah gagal atau kecewa"), ak("sosial", "Mendengarkan teman dengan sungguh-sungguh"), ak("belajar", "Membuat ringkasan dan catatan yang berguna"), ak("karier", "Mencari tahu program keahlian di SMK", "Mencari tahu program studi dan jurusan di perguruan tinggi"),
+  ak("pribadi", "Menjaga kesehatan fisik, makan, dan olahraga"), ak("sosial", "Berbicara dengan guru tentang kesulitanku"), ak("belajar", "Mengurangi rasa cemas saat ulangan"), ak("karier", "Mempersiapkan diri untuk tes masuk sekolah lanjutan", "Mempersiapkan diri untuk tes masuk perguruan tinggi"),
+  ak("pribadi", "Menghargai diri sendiri tanpa selalu membandingkan dengan orang lain"), ak("sosial", "Menjaga etika dan keamanan saat memakai media sosial"), ak("belajar", "Memakai internet dan kecerdasan buatan (AI) dengan jujur untuk belajar"), ak("karier", "Mengenal sikap kerja yang dihargai di dunia kerja"),
+  ak("pribadi", "Memahami nilai dan prinsip yang kupegang", "Merumuskan nilai dan prinsip hidup yang kupegang"), ak("sosial", "Membicarakan masalah dengan orang tua atau keluarga"), ak("belajar", "Belajar kelompok bersama teman dengan efektif"), ak("karier", "Membicarakan rencana masa depan dengan orang tua"),
 ];
-export const akpdItems = (cfg) => AKPD_RAW.map((it) => ({ k: it.k, text: cfg.jenjang === "sma" ? it.sma : it.smp }));
+export const akpdItems = (cfg) => AKPD_RAW.slice(0, cfg.n || 40).map((it) => ({ k: it.k, text: cfg.jenjang === "sma" ? it.sma : it.smp }));
+export const AKPD_DESC = {
+  pribadi: "dirimu sendiri, seperti mengenal diri, mengelola perasaan, dan percaya diri",
+  sosial: "hubungan dengan orang lain, seperti pertemanan, bekerja sama, dan menghadapi konflik",
+  belajar: "belajar dan sekolah, seperti cara belajar, konsentrasi, dan menghadapi ulangan",
+  karier: "masa depanmu, seperti minat, pilihan jurusan, kuliah, kerja, dan beasiswa",
+};
 export const AKPD_OPTS = [{ v: 3, t: "Sangat butuh bantuan" }, { v: 2, t: "Butuh bantuan" }, { v: 1, t: "Sedikit butuh bantuan" }, { v: 0, t: "Tidak butuh bantuan" }];
 export function akpdProfile(a, cfg) {
   const items = akpdItems(cfg), s = {}, n = {};
@@ -417,15 +429,23 @@ export const INSTR = {
     },
   },
   akpd: {
-    heading: "Apa yang kamu butuhkan?",
-    intro: (cfg) => [["Bantuan apa yang kamu perlukan?", `Ada ${akpdItems(cfg).length} hal tentang diri, pertemanan, belajar, dan masa depan. Pilih seberapa kamu butuh bantuan untuk tiap hal.`], ["Jawab dengan jujur", "Hasilnya dipakai gurumu untuk menyusun kegiatan bimbingan yang benar-benar kamu butuhkan."], ["Rahasia, hanya gurumu yang melihat", "Teman-temanmu tidak bisa melihat jawabanmu."]],
+    heading: "Apa yang ingin kamu bantu?",
+    intro: (cfg) => [["Kamu ingin dibantu dalam hal apa?", `Ada ${akpdItems(cfg).length} hal yang sering dihadapi siswa seusiamu. Sekitar ${Math.round(akpdItems(cfg).length / 6)} menit.`], ["Pilih seberapa butuh", "Jawab sesuai keadaanmu sekarang.", ["Sangat butuh bantuan", "Butuh bantuan", "Sedikit butuh bantuan", "Tidak butuh bantuan"]], ["Untuk menyusun bantuan untukmu", "Guru BK membacanya untuk merencanakan layanan. Teman-temanmu tidak bisa melihatnya."]],
     items: (cfg) => akpdItems(cfg),
-    ask: "Seberapa kamu butuh bantuan untuk hal ini?",
+    stem: "Seberapa kamu butuh bantuan untuk…",
     options: () => AKPD_OPTS,
     result(a, cfg, name) {
-      const p = akpdProfile(a, cfg), k = p.order[0];
-      return thanks(name, `<div class="gb-tips"><h2>Bidang yang paling ingin kamu bantu</h2><p style="margin-top:.4rem"><b style="font-weight:600">${AKPD_BIDANG[k]}</b>. Gurumu akan menyiapkan kegiatan yang sesuai.</p></div>
-        <div class="gb-tips"><h2>Ke mana bisa bercerita</h2><ul><li>Guru BK di ruang BK, saat istirahat atau pulang sekolah.</li><li>Wali kelas atau guru yang kamu percaya.</li><li>Orang tua atau keluarga di rumah.</li></ul></div>`);
+      const p = akpdProfile(a, cfg), items = akpdItems(cfg), top = p.order[0], any = p.pct[top] > 0;
+      const wants = items.map((it, i) => ({ text: it.text, v: Number(a?.[i]) || 0, i })).filter((x) => x.v >= 1).sort((x, y) => y.v - x.v || x.i - y.i).slice(0, 5);
+      const lead = any ? `Kamu paling ingin dibantu di bidang <b style="font-weight:600">${AKPD_BIDANG[top].toLowerCase()}</b>, yaitu ${AKPD_DESC[top]}.` : "Belakangan ini kamu belum merasa butuh banyak bantuan di bidang mana pun. Kalau nanti ada yang ingin kamu tanyakan, gurumu siap mendengar.";
+      const minTop = p.order[p.order.length - 1];
+      return `<p class="gb-eyebrow">Hasilmu</p><h1>Terima kasih sudah jujur, ${esc(name)}.</h1>
+        <p class="lead" style="margin-top:.6rem">${lead}</p>
+        <div class="gb-tips akb">${p.order.slice().sort((x, y) => ["pribadi", "sosial", "belajar", "karier"].indexOf(x) - ["pribadi", "sosial", "belajar", "karier"].indexOf(y)).map((k) => `<div class="b"><span class="nm">${AKPD_BIDANG[k]}</span><span class="track"><i class="${k === top && any ? "top" : ""}" style="width:${Math.max(3, p.pct[k])}%"></i></span></div>`).join("")}
+          <p class="muted small" style="margin-top:.5rem">Makin panjang batangnya, makin besar bantuan yang kamu rasa perlukan.</p></div>
+        ${wants.length ? `<div class="gb-tips"><h2>Yang paling ingin kamu bantu</h2><ul>${wants.map((x) => `<li>${esc(x.text)}</li>`).join("")}</ul></div>` : ""}
+        <div class="caveat" style="margin-top:1rem">Gurumu memakai jawaban seluruh kelas untuk menyusun layanan BK, jadi topik yang kamu butuhkan bisa dibahas bersama. Kalau ada yang ingin kamu ceritakan sekarang, temui guru BK kapan saja. Kamu tidak sendirian.</div>
+        ${talk(true)}`;
     },
   },
   aman: {
