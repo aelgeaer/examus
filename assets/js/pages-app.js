@@ -425,7 +425,7 @@ const KIND = { admin: "Admin", guru: "Guru", siswa: "Siswa" };
 export function account({ user }) {
   const html = `${header(user, "akun")}<main class="page"><div class="narrow" style="max-width:460px">
     <h1 class="page-title">Pengaturan akun</h1>
-    <p class="page-sub">${esc(user.name || user.username)}. Nama akun ${esc(user.username)}.</p>
+    <p class="page-sub" style="margin-top:1rem"><b style="font-weight:700">${esc(user.name || user.username)}</b><br>Nama akun : ${esc(user.username)}</p>
     <h2 class="sec-h">Ganti kata sandi</h2>
     ${pwForm("pw", "Ganti kata sandi")}
   </div></main>`;
