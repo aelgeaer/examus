@@ -187,17 +187,62 @@ const TK_RAW = [
   tk("SN", "Aku lebih suka disebut…", "teliti dan realistis", "kreatif dan penuh imajinasi"),
   tk("TF", "Saat menilai karya teman, aku…", "jujur apa adanya", "memilih kata yang tidak menyakitkan"),
   tk("JP", "Aku lebih suka permainan yang…", "aturannya jelas", "bisa dimainkan dengan bebas"),
+  tk("EI", "Kalau ada waktu kosong di sekolah, aku lebih sering…", "mencari teman untuk diajak bercerita", "membaca, menggambar, atau melamun sendiri"),
+  tk("SN", "Kalau diminta membuat karangan, aku lebih mudah menulis tentang…", "pengalaman yang benar-benar kualami", "dunia khayalan atau kemungkinan yang kubayangkan"),
+  tk("TF", "Saat menilai lomba teman-teman, aku menilai terutama dari…", "kriteria yang sudah ditentukan", "usaha dan kesungguhan peserta"),
+  tk("JP", "Kalau ada ulangan minggu depan, aku…", "membagi bahan belajar ke beberapa hari", "belajar paling banyak saat hari ujian sudah dekat"),
+  tk("EI", "Dalam kelompok baru, orang lain biasanya melihatku sebagai…", "yang paling banyak bicara di awal", "yang lebih banyak menyimak dulu"),
+  tk("SN", "Saat membaca petunjuk soal, aku…", "mengikuti persis apa yang tertulis", "mencari tahu maksud di balik petunjuknya"),
+  tk("TF", "Kalau ada teman yang ditegur guru, aku…", "menilai apakah teguran itu masuk akal", "ikut merasa kasihan padanya"),
+  tk("JP", "Barang yang mau kubawa ke sekolah besok…", "sudah kusiapkan sejak malam", "baru kusiapkan pagi harinya"),
+  tk("EI", "Kalau berulang tahun, aku lebih suka…", "merayakannya bersama banyak orang", "merayakannya sederhana bersama orang terdekat"),
+  tk("SN", "Aku lebih sering mengingat…", "kejadian dan detailnya, seperti hari dan tempatnya", "kesan dan makna dari kejadiannya"),
+  tk("TF", "Orang menganggapku lebih…", "tegas dan langsung ke inti", "lembut dan penuh pengertian"),
+  tk("JP", "Aku lebih nyaman dengan pekerjaan yang…", "punya urutan dan batas waktu jelas", "boleh dikerjakan dengan cara dan waktu yang fleksibel"),
 ];
 // Urutan pilihan dibalik di butir genap supaya murid tidak menjawab satu sisi terus.
 export const TK_ITEMS = TK_RAW.map((it, i) => {
   const [L, R] = TK_DIMS[it.d], opts = [{ v: L, t: it.a }, { v: R, t: it.b }];
   return { ...it, options: i % 2 ? opts.reverse() : opts };
 });
+// Tiap pasangan dinilai dari 11 butir. Kekuatan preferensi mengikuti jumlah pilihan terbanyak:
+// 6-7 dari 11 = tipis, 8-9 = sedang, 10-11 = jelas. Ganjil, jadi tidak pernah seri. Bila tiga pasangan atau lebih
+// "tipis", hasil dibaca sebagai "luwes": huruf tipe tetap dihitung tetapi kurang bermakna. Ini patokan Examus, bukan norma baku.
+export const TK_AXIS = {
+  EI: { title: "Sumber energi", L: "Bersama orang", R: "Waktu sendiri" },
+  SN: { title: "Cara menangkap informasi", L: "Fakta nyata", R: "Ide dan kemungkinan" },
+  TF: { title: "Cara mengambil keputusan", L: "Logika", R: "Nilai dan perasaan" },
+  JP: { title: "Cara menata kegiatan", L: "Terencana", R: "Fleksibel" },
+};
+export const TK_TYPES = {
+  ISTJ: ["Si Teliti yang Dapat Diandalkan", "rajin, teratur, dan menepati janji"], ISFJ: ["Si Penjaga yang Hangat", "setia, peduli, dan memperhatikan kebutuhan orang di sekitarnya"],
+  INFJ: ["Si Pemikir yang Peduli", "tenang, punya pandangan jauh, dan ingin berarti bagi orang lain"], INTJ: ["Si Perencana Mandiri", "suka menyusun strategi dan bekerja dengan caranya sendiri"],
+  ISTP: ["Si Pengutak-atik", "tenang, praktis, dan suka memahami cara kerja sesuatu"], ISFP: ["Si Seniman yang Tenang", "lembut, peka pada keindahan, dan setia pada nilai yang dipegangnya"],
+  INFP: ["Si Pemimpi yang Tulus", "penuh imajinasi dan berpegang pada hal yang ia anggap bermakna"], INTP: ["Si Penyelidik", "suka menganalisis dan mencari tahu mengapa sesuatu terjadi"],
+  ESTP: ["Si Pencoba yang Gesit", "berani mencoba dan pandai menyesuaikan diri saat itu juga"], ESFP: ["Si Penghibur", "ceria, spontan, dan membuat suasana hidup"],
+  ENFP: ["Si Pencetus Ide", "antusias, kreatif, dan mudah menularkan semangat"], ENTP: ["Si Penantang Gagasan", "suka berdebat ide dan menemukan cara baru"],
+  ESTJ: ["Si Pengatur", "tegas, terorganisir, dan senang menuntaskan pekerjaan"], ESFJ: ["Si Penyatu", "ramah, suka membantu, dan menjaga kebersamaan"],
+  ENFJ: ["Si Penyemangat", "pandai memotivasi dan membantu teman berkembang"], ENTJ: ["Si Pemimpin yang Terarah", "suka memimpin, menetapkan tujuan, dan mengambil keputusan"],
+};
+export const TK_GRID = ["ISTP", "ISFP", "INFP", "INTP", "ESTP", "ESFP", "ENFP", "ENTP", "ESTJ", "ESFJ", "ENFJ", "ENTJ", "ISTJ", "ISFJ", "INFJ", "INTJ"];
+export const TK_TIP = {
+  E: "Belajar sambil berdiskusi atau menjelaskan kepada teman.", I: "Beri dirimu waktu tenang untuk berpikir sebelum menjawab atau berdiskusi.",
+  S: "Cari contoh nyata dan latihan langkah demi langkah.", N: "Mulai dari gambaran besar, lalu turun ke detail.",
+  T: "Pahami alasan dan logika di balik tiap materi.", F: "Hubungkan materi dengan hal yang kamu pedulikan, dan belajar bersama teman yang suportif.",
+  J: "Buat jadwal belajar dan tandai yang sudah selesai.", P: "Pasang tenggat kecil untuk dirimu sendiri supaya tugas tidak menumpuk di akhir.",
+};
 export function tkProfile(a) {
   const c = {}; TK_ITEMS.forEach((it, i) => { const v = a?.[i]; if (v) c[v] = (c[v] || 0) + 1; });
-  const pick = ([L, R]) => ((c[L] || 0) > (c[R] || 0) ? L : R);
-  const close = Object.values(TK_DIMS).filter(([L, R]) => Math.abs((c[L] || 0) - (c[R] || 0)) <= 2).map(([L, R]) => L + "/" + R);
-  return { c, type: Object.values(TK_DIMS).map(pick).join(""), close };
+  const axes = Object.entries(TK_DIMS).map(([d, [L, R]]) => {
+    const nL = c[L] || 0, nR = c[R] || 0, win = nL > nR ? L : R, n = Math.max(nL, nR), total = nL + nR;
+    const strength = n >= 10 ? "jelas" : n >= 8 ? "sedang" : "tipis";
+    return { d, L, R, nL, nR, win, n, total, strength };
+  });
+  const type = axes.map((x) => x.win).join("");
+  const thin = axes.filter((x) => x.strength === "tipis");
+  const flexible = thin.length >= 3;
+  const close = thin.map((x) => x.L + "/" + x.R);
+  return { c, axes, type, close, thin: thin.length, flexible };
 }
 
 /* ---------------- AKPD ---------------- */
@@ -349,16 +394,26 @@ export const INSTR = {
     },
   },
   kepribadian: {
-    heading: "Kenali dirimu",
-    intro: () => [["Kamu lebih mirip yang mana?", `Ada ${TK_ITEMS.length} situasi sehari-hari, masing-masing dengan dua pilihan. Pilih yang lebih mirip dirimu.`], ["Tidak ada yang lebih baik", "Kedua pilihan sama baiknya. Pilih yang paling sering terjadi padamu, bukan yang kamu inginkan."], ["Hasilnya langsung untukmu", "Di akhir, kamu melihat empat huruf tipemu, kekuatanmu, dan cara belajar yang mungkin cocok."]],
+    heading: "Kenali tipe kepribadianmu",
+    letters: true,
+    intro: () => [["Kamu orang yang seperti apa?", `Ada ${TK_ITEMS.length} situasi, masing-masing dengan dua pilihan. Pilih yang lebih mirip denganmu, walau keduanya terasa cocok.`], ["Jadilah dirimu sendiri", "Jawab seperti kamu biasanya, bukan seperti yang diharapkan guru atau orang tua. Tidak ada tipe yang lebih baik."], ["Hasilnya langsung untukmu", "Sekitar 7 menit. Di akhir, kamu melihat tipemu dan artinya."]],
     items: () => TK_ITEMS.map((it) => ({ text: it.text, options: it.options })),
-    ask: "Pilih yang lebih mirip dirimu.",
+    stem: "Mana yang lebih mirip kamu?",
     result(a, cfg, name) {
-      const p = tkProfile(a);
-      return `<p class="gb-eyebrow">Hasil tipe kepribadianmu</p><h1>${p.type}</h1><p class="lead">${p.type.split("").map((l) => TK_LETTER[l].name).join(" · ")}</p>
-        <div class="gb-tips"><h2>Kekuatanmu</h2><ul>${p.type.split("").map((l) => `<li>Kamu ${TK_LETTER[l].str}.</li>`).join("")}</ul></div>
-        <div class="gb-tips"><h2>Cara belajar yang mungkin cocok</h2><ul>${p.type.split("").slice(0, 2).map((l) => `<li>${TK_LETTER[l].learn[0].toUpperCase() + TK_LETTER[l].learn.slice(1)}.</li>`).join("")}</ul></div>
-        <p class="muted" style="margin-top:1rem">${p.close.length ? `Pada pasangan ${p.close.join(", ")}, pilihanmu hampir seimbang. ` : ""}Tipe ini menggambarkan kecenderungan, bukan batas kemampuanmu, ${esc(name)}.</p>`;
+      const p = tkProfile(a), [tname, tdesc] = TK_TYPES[p.type];
+      const bars = `<div class="gb-tips tkb"><h2>Empat pasangan preferensimu</h2>${p.axes.map((x) => {
+        const ax = TK_AXIS[x.d], leftWin = x.win === x.L, w = (Math.abs(x.nL - x.nR) / x.total) * 50;
+        return `<div class="tkrow"><p class="tkt">${ax.title}</p><div class="tkline"><span class="l${leftWin ? " on" : ""}"><b>${x.L}</b> ${ax.L}</span><span class="tr"><i class="mid"></i><i class="fill" style="${leftWin ? "right" : "left"}:50%;width:${w}%"></i></span><span class="r${leftWin ? "" : " on"}">${ax.R} <b>${x.R}</b></span></div><p class="tkn">${x.n} dari ${x.total} pilihan · ${x.strength}</p></div>`;
+      }).join("")}<p class="muted small" style="margin-top:.6rem">Makin panjang batangnya, makin jelas kecenderunganmu. Batang pendek berarti kamu hampir seimbang di kedua sisi.</p></div>`;
+      const strong = [...p.axes].sort((x, y) => y.n - x.n).slice(0, 2);
+      const tips = `<div class="gb-tips"><h2>Cara belajar yang mungkin cocok</h2><ul>${strong.map((x) => `<li>${TK_TIP[x.win]}</li>`).join("")}</ul></div>`;
+      const grid = `<div class="gb-tips"><h2>Enam belas tipe</h2><div class="tk16">${TK_GRID.map((g) => `<span class="${g === p.type ? "me" : ""}">${g}</span>`).join("")}</div></div>`;
+      const think = `<div class="gb-tips"><h2>Coba pikirkan</h2><ul><li>Dalam situasi apa kamu justru bersikap sebaliknya dari hasil ini?</li><li>Bagian mana dari hasil ini yang paling terasa "aku banget"? Bagian mana yang tidak?</li><li>Teman yang tipenya berbeda denganmu punya kelebihan apa yang bisa kamu pelajari?</li></ul></div>`;
+      const head = p.flexible
+        ? `<h1 class="center">Kamu luwes di banyak hal</h1><p class="lead center">Di sebagian besar pasangan, pilihanmu hampir seimbang di kedua sisi. Hasil terdekatnya ${p.type}, tetapi itu belum banyak berarti: bisa jadi kamu menyesuaikan diri dengan keadaan, atau masih mengenali dirimu. Baca keempat pasangan di bawah satu per satu.</p>`
+        : `<h1 class="center">${p.type}</h1><p class="lead center"><b style="font-weight:600">${tname}</b>: ${tdesc}.</p>${p.thin ? `<p class="muted center" style="margin-top:.5rem">Pada ${p.thin} pasangan pilihanmu masih tipis, jadi bisa jadi kamu memakai kedua sisinya.</p>` : ""}`;
+      return `<p class="gb-eyebrow">Hasil tipe kepribadianmu</p>${head}${bars}${tips}${grid}${think}
+        <div class="caveat" style="margin-top:1rem">Ini gambaran apa yang terasa paling nyaman bagimu saat ini, bukan ukuran kemampuan dan bukan kotak yang mengurungmu. Semua orang memakai kedua sisi setiap pasangan, dan hasilmu bisa berubah seiring waktu. Ceritakan hasil ini kepada orang tua dan gurumu, ${esc(name)}!</div>`;
     },
   },
   akpd: {

@@ -579,3 +579,19 @@ dialog.sheet::backdrop { background: rgba(12, 35, 64, .45); }
 .gloss dt { font-weight: 600; margin-top: .9rem; }
 .gloss dt:first-child { margin-top: 0; }
 .gloss dd { margin: .2rem 0 0; color: var(--ink-2); line-height: 1.55; }
+
+/* Hasil tipe kepribadian murid */
+.tkb .tkrow { margin-top: 1rem; }
+.tkb .tkt { font-weight: 500; }
+.tkline { display: grid; grid-template-columns: minmax(0, 1fr) minmax(70px, 1.2fr) minmax(0, 1fr); gap: .6rem; align-items: center; margin-top: .3rem; font-size: .95rem; }
+.tkline .l { text-align: left; } .tkline .r { text-align: right; }
+.tkline .on b { color: var(--blue-dark); }
+.tkline .on { font-weight: 500; }
+.tkline .tr { position: relative; height: 16px; background: var(--sky); border-radius: 999px; overflow: hidden; }
+.tkline .tr .mid { position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; background: var(--ink); z-index: 2; }
+.tkline .tr .fill { position: absolute; top: 3px; bottom: 3px; background: var(--blue); border-radius: 999px; }
+.tkb .tkn { text-align: center; color: var(--ink-2); font-size: .88rem; margin-top: .25rem; }
+.tk16 { display: grid; grid-template-columns: repeat(4, 1fr); gap: .4rem; margin-top: .7rem; }
+.tk16 span { background: var(--sky-soft); border-radius: 12px; padding: .55rem 0; text-align: center; font-size: .9rem; letter-spacing: .04em; }
+.tk16 span.me { background: var(--blue); color: #fff; font-weight: 600; }
+@media (max-width: 460px) { .tkline { grid-template-columns: 1fr; } .tkline .r, .tkline .l { text-align: left; } }

@@ -59,7 +59,7 @@ export const ASSESSMENTS = [
   { id: "kepribadian", name: "Tipe Kepribadian", ready: true, tone: "", who: "Guru BK dan psikolog sekolah",
     short: "Empat preferensi tiap murid (16 tipe ala Jung), untuk mengenal diri dan memvariasikan cara mengajar.",
     long: "Empat preferensi tiap murid (16 tipe ala Jung), untuk mengenal diri dan memvariasikan cara mengajar.",
-    about: [A("Yang dikerjakan murid", "32 situasi sehari-hari, masing-masing dua pilihan. Murid memilih yang lebih mirip dirinya, kira-kira 6 menit di HP."),
+    about: [A("Yang dikerjakan murid", "44 situasi sehari-hari, masing-masing dua pilihan. Murid memilih yang lebih mirip dirinya, kira-kira 7 menit di HP."),
       A("Contoh situasi", "Sesudah hari yang melelahkan, aku paling cepat pulih dengan…", { ex: ["mengobrol atau bermain bersama teman", "menyendiri dan melakukan hal yang kusuka"] }),
       A("Yang dilihat murid", "Empat hurufnya (misalnya INFP), kekuatannya, dan cara belajar yang mungkin cocok."),
       A("Yang Anda dapat", "Tabel 16 tipe kelas, sebaran tiap pasangan, murid per kelompok, saran mengajar, dan tipe tiap murid."),

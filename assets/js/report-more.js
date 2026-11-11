@@ -5,7 +5,7 @@ import { radar } from "./charts.js";
 import { RIASEC, MINAT_ITEMS } from "./data.js";
 import {
   RIASEC_EX, RIASEC_KEYS, RIASEC_LABEL, minatProfile, KK_AREAS, KK_ITEMS, kkProfile, kkLevel, kkTotalLevel, kkLevelName, PHQ_ITEMS, PHQ_IMPACT, phqItems, phqProfile,
-  TK_DIMS, TK_LETTER, tkProfile, AKPD_BIDANG, akpdItems, akpdProfile, PR_ASPEK, PR_ITEMS, prProfile,
+  TK_DIMS, TK_LETTER, TK_AXIS, TK_TYPES, TK_GRID, tkProfile, AKPD_BIDANG, akpdItems, akpdProfile, PR_ASPEK, PR_ITEMS, prProfile,
 } from "./instruments.js";
 
 const pct = (n, d) => (d ? Math.round((n / d) * 100) : 0);
@@ -218,30 +218,42 @@ export function emosiReport(s, res) {
 /* ---------------- Tipe kepribadian ---------------- */
 export function kepribadianReport(s, res) {
   const rows = join(s, res, tkProfile), done = rows.filter((r) => r.filled);
-  const grid = [["IS", "IN"], ["ES", "EN"]].flatMap((r) => r).flatMap((a) => ["TJ", "FJ", "TP", "FP"].map((b) => a[0] + a[1] + b));
-  const count = (t) => done.filter((r) => r.p.type === t);
+  const count = (tp) => done.filter((r) => r.p.type === tp && !r.p.flexible);
+  const flex = done.filter((r) => r.p.flexible);
   const split = Object.entries(TK_DIMS).map(([d, [L, R]]) => [d, L, R, done.filter((r) => r.p.type.includes(L)).length]);
+  const strengthCount = (d, s2) => done.filter((r) => r.p.axes.find((x) => x.d === d).strength === s2).length;
   const body = `
+    <p class="muted" style="margin-top:1rem">${done.length} murid mengisi. ${flex.length ? `<b style="font-weight:600">${flex.length} murid dibaca "luwes"</b> (tiga pasangan atau lebih tipis): hurufnya tetap dihitung tetapi kurang bermakna, jadi tidak dimasukkan ke tabel tipe.` : "Semua murid punya kecenderungan yang cukup jelas pada setidaknya dua pasangan."}</p>
     <h2 class="sec-h">Tabel 16 tipe</h2>
-    <div class="tkgrid">${grid.map((t) => `<div class="cell${count(t).length ? " on" : ""}"><b>${t}</b><span>${count(t).length}</span>${count(t).length ? `<small>${count(t).map((r) => esc(r.name.split(" ")[0])).join(", ")}</small>` : ""}</div>`).join("")}</div>
+    <div class="tkgrid">${TK_GRID.map((t2) => `<div class="cell${count(t2).length ? " on" : ""}"><b>${t2}</b><span>${count(t2).length}</span>${count(t2).length ? `<small>${count(t2).map((r) => esc(r.name.split(" ")[0])).join(", ")}</small>` : ""}</div>`).join("")}</div>
     <h2 class="sec-h">Sebaran tiap pasangan</h2>
-    <div class="card">${split.map(([, L, R, nL]) => `<div class="tksplit"><span>${TK_LETTER[L].name} (${L}) <b>${nL}</b></span><span class="bar"><i style="width:${pct(nL, done.length)}%"></i></span><span><b>${done.length - nL}</b> ${TK_LETTER[R].name} (${R})</span></div>`).join("")}</div>
+    <div class="card">${split.map(([d, L, R, nL]) => `<div class="tksplit"><span>${TK_LETTER[L].name} (${L}) <b>${nL}</b></span><span class="bar"><i style="width:${pct(nL, done.length)}%"></i></span><span><b>${done.length - nL}</b> ${TK_LETTER[R].name} (${R})</span></div>`).join("")}</div>
+    <h2 class="sec-h">Kekuatan preferensi per pasangan</h2>
+    ${tbl(["Pasangan", { t: "Tipis", num: 1 }, { t: "Sedang", num: 1 }, { t: "Jelas", num: 1 }], Object.keys(TK_DIMS).map((d) => [`${TK_AXIS[d].title} (${TK_DIMS[d].join("/")})`, strengthCount(d, "tipis"), strengthCount(d, "sedang"), strengthCount(d, "jelas")]))}
     <h2 class="sec-h">Murid per kelompok</h2>
-    <div class="ggroups">${Object.values(TK_DIMS).flat().map((l) => { const list = done.filter((r) => r.p.type.includes(l)); return `<div class="card"><p class="gh">${TK_LETTER[l].name} (${l}) <span class="muted">${list.length}</span></p><p class="muted small" style="margin-top:.3rem">Cocok dengan ${esc(TK_LETTER[l].learn)}.</p>${list.length ? `<p style="margin-top:.4rem">${names(list)}</p>` : ""}</div>`; }).join("")}</div>
+    <div class="ggroups">${Object.values(TK_DIMS).flat().map((l) => { const list = done.filter((r) => r.p.type.includes(l) && !r.p.flexible); return `<div class="card"><p class="gh">${TK_LETTER[l].name} (${l}) <span class="muted">${list.length}</span></p><p class="muted small" style="margin-top:.3rem">Cocok dengan ${esc(TK_LETTER[l].learn)}.</p>${list.length ? `<p style="margin-top:.4rem">${names(list)}</p>` : ""}</div>`; }).join("")}</div>
     <h2 class="sec-h">Tipe per murid</h2>
-    ${tbl(["No", "Nama", "Tipe", { t: "E/I", num: 1 }, { t: "S/N", num: 1 }, { t: "T/F", num: 1 }, { t: "J/P", num: 1 }, "Hampir seimbang"], rows.map((r) => (r.filled
-      ? [r.no, r.name, r.p.type, ...Object.values(TK_DIMS).map(([L, R]) => `${r.p.c[L] || 0}-${r.p.c[R] || 0}`), r.p.close.join(", ") || "-"]
+    ${tbl(["No", "Nama", "Tipe", ...Object.keys(TK_DIMS).map((d) => ({ t: TK_DIMS[d].join("/"), wrap: 1 })), "Catatan"], rows.map((r) => (r.filled
+      ? [r.no, r.name, r.p.flexible ? `${r.p.type}*` : r.p.type, ...r.p.axes.map((x) => `${x.nL}-${x.nR} ${x.strength}`), r.p.flexible ? "luwes: tipe sementara" : r.p.thin ? `${r.p.thin} pasangan tipis` : "-"]
       : [r.no, r.name, "Belum mengisi", "-", "-", "-", "-", "-"])))}
-    <p class="muted small" style="margin-top:.5rem">Angka = jumlah pilihan untuk huruf pertama dan kedua (8 situasi per pasangan). Selisih 2 atau kurang berarti hampir seimbang.</p>
+    <p class="muted small" style="margin-top:.5rem">Angka = jumlah pilihan untuk huruf pertama dan kedua dari 11 situasi tiap pasangan, diikuti kekuatannya. * = tipe sementara (murid luwes).</p>
     ${unfilled(rows)}
+    <h2 class="sec-h">Keterangan istilah</h2>
+    <dl class="gloss">
+      <dt>Empat pasangan (E/I, S/N, T/F, J/P)</dt><dd>Menurut teori tipe psikologis Jung: <b>E/I</b> sumber energi (bersama orang atau waktu sendiri), <b>S/N</b> cara menangkap informasi (fakta nyata atau ide dan kemungkinan), <b>T/F</b> cara mengambil keputusan (logika atau nilai dan perasaan), <b>J/P</b> cara menata kegiatan (terencana atau fleksibel). Tiap pasangan dinilai dari 11 situasi.</dd>
+      <dt>Tipe (empat huruf)</dt><dd>Gabungan huruf yang dipilih paling banyak di tiap pasangan, misalnya INFP. Ada 16 kemungkinan. Tipe menggambarkan kecenderungan, bukan kemampuan.</dd>
+      <dt>Kekuatan preferensi: tipis, sedang, jelas</dt><dd>Mengikuti jumlah pilihan terbanyak dari 11: 6-7 tipis, 8-9 sedang, 10-11 jelas. Tipis berarti murid hampir seimbang di kedua sisi, jadi hurufnya kurang kokoh. Batas ini patokan Examus, bukan norma baku.</dd>
+      <dt>Luwes (tipe sementara, *)</dt><dd>Murid dengan tiga pasangan atau lebih yang tipis. Hurufnya tetap dihitung tetapi kurang bermakna; bisa jadi ia menyesuaikan diri dengan keadaan atau masih mengenali dirinya. Baca pasangan satu per satu, jangan sebagai tipe.</dd>
+      <dt>Sebaran tiap pasangan</dt><dd>Jumlah murid yang condong ke tiap sisi. Gambaran kelas, tidak untuk menilai murid perorangan.</dd>
+    </dl>
     ${tips("Saran mengajar", [
       `${split[0][3] >= done.length / 2 ? "Kelas ini lebih banyak ekstrovert: sediakan diskusi dan kerja kelompok, tetapi beri juga waktu berpikir sendiri." : "Kelas ini lebih banyak introvert: beri waktu berpikir sebelum meminta jawaban, dan pakai diskusi berpasangan sebelum diskusi kelas."}`,
       `${split[1][3] >= done.length / 2 ? "Banyak murid sensing: mulai dari contoh nyata dan langkah yang jelas." : "Banyak murid intuition: mulai dari gambaran besar, lalu turun ke detail."}`,
       "Campur tipe yang berbeda saat menyusun kelompok supaya saling melengkapi.",
       "Pakai hasil ini untuk mengenal diri dan memvariasikan cara mengajar, bukan untuk melabeli atau memilih murid.",
     ])}
-    ${caveat("Butir ditulis untuk Examus berdasarkan teori tipe psikologis Jung (E/I, S/N, T/F, J/P). Ini bukan MBTI® dan belum divalidasi. Tipe menggambarkan kecenderungan, bukan kemampuan.")}`;
-  return { body, csv: () => [["No", "Nama", "L/P", "Tipe", "E", "I", "S", "N", "T", "F", "J", "P"], ...rows.map((r) => (r.filled ? [r.no, r.name, r.g, r.p.type, ..."EISNTFJP".split("").map((l) => r.p.c[l] || 0)] : [r.no, r.name, r.g, "Belum mengisi"]))] };
+    ${caveat("Butir ditulis untuk Examus berdasarkan teori tipe psikologis Jung. Ini bukan MBTI® dan belum divalidasi secara psikometrik; batas kekuatan preferensi adalah patokan Examus. Tipe menggambarkan kecenderungan, bukan kemampuan, dan tidak boleh dipakai untuk menyeleksi atau melabeli murid.")}`;
+  return { body, csv: () => [["No", "Nama", "L/P", "Tipe", "Luwes", "E", "I", "S", "N", "T", "F", "J", "P", "Kekuatan E/I", "Kekuatan S/N", "Kekuatan T/F", "Kekuatan J/P"], ...rows.map((r) => (r.filled ? [r.no, r.name, r.g, r.p.type, r.p.flexible ? "ya" : "tidak", ..."EISNTFJP".split("").map((l) => r.p.c[l] || 0), ...r.p.axes.map((x) => x.strength)] : [r.no, r.name, r.g, "Belum mengisi"]))] };
 }
 
 /* ---------------- AKPD ---------------- */
