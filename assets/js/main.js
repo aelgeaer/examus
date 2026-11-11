@@ -1,24 +1,24 @@
 import { store, configured } from "./store.js";
 import { esc, go, homePath } from "./util.js";
-import { landing, blog, post, legal, login, notFound, header } from "./pages-public.js";
+import { landing, blog, post, legal, login, register, notFound, header } from "./pages-public.js";
 import { onboarding, dashboard, classes, classEdit, start, session, account, admin, changePassword } from "./pages-app.js";
 import { report } from "./reports.js";
-import { studentHome, studentFill } from "./pages-student.js";
+import { student } from "./pages-student.js";
 
-// auth: "any" = semua akun yang sudah masuk, "staff" = guru dan admin,
-//       "student" = siswa, "admin" = admin
+// auth: "any" = semua akun yang sudah masuk, "staff" = guru dan admin, "admin" = admin.
+// Murid tidak punya akun: mereka membuka /s/:code dari link guru.
 const ROUTES = [
   ["/", landing],
   ["/blog", blog],
   ["/blog/:slug", post],
   ["/masuk", login],
+  ["/daftar", register],
+  ["/s/:code", student],
   ["/ganti-sandi", changePassword, "any"],
-  ["/siswa", studentHome, "student"],
-  ["/isi/:id", studentFill, "student"],
   ["/kenalan", onboarding, "staff"],
   ["/dasbor", dashboard, "staff"],
   ["/kelas", classes, "staff"],
-  ["/kelas/:id", classEdit, "admin"],
+  ["/kelas/:id", classEdit, "staff"],
   ["/mulai/:type", start, "staff"],
   ["/sesi/:id", session, "staff"],
   ["/sesi/:id/hasil", report, "staff"],
@@ -51,14 +51,19 @@ async function render() {
   const [path, qs = ""] = raw.split("?");
   const { page, params, auth } = match(path.replace(/\/+$/, "") || "/");
   try {
+    // Halaman murid tidak butuh data akun sama sekali.
+    if (page === student) {
+      const view = await page({ params, query: new URLSearchParams(qs) });
+      if (mine !== token) return;
+      app.innerHTML = view.html; document.title = view.title ? `${view.title} | Examus` : "Examus"; scrollTo(0, 0);
+      view.mount && view.mount(app, {}); return;
+    }
     const user = await store.me();
     if (auth && !user) { go("/masuk?lanjut=" + encodeURIComponent(path)); return; }
     if (user) {
       // Akun baru wajib mengganti kata sandi dari admin sebelum memakai apa pun.
       if (user.mustChange && page !== changePassword) { go("/ganti-sandi"); return; }
       if (auth === "admin" && !user.isAdmin) { go(homePath(user)); return; }
-      if (auth === "staff" && user.kind === "siswa") { go("/siswa"); return; }
-      if (auth === "student" && user.kind !== "siswa") { go(homePath(user)); return; }
       if (page === dashboard && user.isSuper) { go("/admin"); return; }
       if (auth === "staff" && user.kind === "guru" && !user.onboarded && page !== onboarding) { go("/kenalan"); return; }
     }

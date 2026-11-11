@@ -83,8 +83,12 @@ export function parseRoster(text) {
 
 export const go = (path) => { location.hash = "#" + path; };
 
+// Link yang dibagikan guru ke murid.
+export const siteBase = () => location.origin + location.pathname;
+export const studentLink = (code) => siteBase() + "#/s/" + code;
+
 // Halaman awal setelah masuk, sesuai jenis akun.
-export const homePath = (user) => (!user ? "/masuk" : user.kind === "siswa" ? "/siswa" : user.isSuper ? "/admin" : "/dasbor");
+export const homePath = (user) => (!user ? "/masuk" : user.isSuper ? "/admin" : "/dasbor");
 
 // Kata sandi acak 8 karakter tanpa huruf yang mudah tertukar (l, i, o, 0, 1).
 export function genPassword(len = 8) {

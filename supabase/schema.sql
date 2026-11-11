@@ -2,15 +2,18 @@
 -- Cara pakai: proyek Supabase BARU > SQL Editor > tempel seluruh isi file ini > Run.
 -- Setelah itu jalankan perintah "Membuat admin pertama" di bagian paling bawah.
 -- File ini juga aman dijalankan ULANG di proyek yang sudah berjalan: ia meningkatkan skema
--- lama (kelas milik guru) ke versi sekarang tanpa menghapus data.
+-- versi lama ke versi sekarang tanpa menghapus data.
 --
 -- Ringkasan rancangan:
 --  * Satu database, lima sekolah. Setiap baris data punya school_id dan Row Level Security
 --    memastikan akun sebuah sekolah tidak bisa melihat data sekolah lain.
---  * Tidak ada pendaftaran mandiri. Semua akun dibuat admin lewat fungsi admin_*.
+--  * Guru mendaftar sendiri (register_teacher: nama, sekolah, nama akun, kata sandi).
+--    Admin juga bisa membuatkan akun guru atau admin lewat fungsi admin_*.
 --  * Admin dengan school_id kosong = admin pusat (melihat semua sekolah).
---  * Kelas dan daftar murid hanya dibuat admin. Admin menugaskan kelas ke guru (class_teachers);
---    satu guru boleh memegang banyak kelas. Guru hanya melihat kelas yang ditugaskan.
+--  * Guru membuat kelas dan daftar muridnya sendiri (save_class). Pembuat kelas otomatis
+--    tercatat sebagai pemegangnya di class_teachers; admin sekolah melihat semua kelas sekolahnya.
+--  * Murid TIDAK punya akun. Guru membagikan link sesi (kode acak); murid membuka link,
+--    memilih namanya, dan mengisi (session_public + submit_response, bisa tanpa login).
 --  * Kata sandi awal dari admin disimpan di tabel credentials (tanpa akses langsung dari
 --    aplikasi, hanya dibaca lewat admin_users). Begitu pengguna mengganti sandinya, salinan
 --    itu dihapus dan hanya tersisa hash bcrypt di auth.users.
@@ -44,8 +47,8 @@ create table if not exists public.profiles (
   title text,            -- peran di sekolah: Guru BK, Wali kelas, dst.
   city text,
   letterhead text,
-  class_id uuid references public.classes on delete set null,    -- khusus siswa
-  member_no int,                                                 -- khusus siswa: nomor di daftar kelas
+  class_id uuid references public.classes on delete set null,    -- akun siswa versi lama
+  member_no int,                                                 -- akun siswa versi lama (tidak dipakai lagi)
   must_change boolean not null default true,
   onboarded boolean not null default false,
   created_at timestamptz not null default now(),
@@ -93,6 +96,12 @@ create table if not exists public.sessions (
   created_at timestamptz not null default now()
 );
 
+-- Kode link untuk murid. Sesi lama yang belum punya kode diberi kode acak.
+alter table public.sessions add column if not exists code text;
+update public.sessions set code = substr(replace(replace(encode(extensions.gen_random_bytes(9), 'base64'), '/', 'x'), '+', 'y'), 1, 10) where code is null;
+alter table public.sessions alter column code set not null;
+create unique index if not exists sessions_code_key on public.sessions (code);
+
 create table if not exists public.responses (
   id uuid primary key default gen_random_uuid(),
   session_id uuid not null references public.sessions on delete cascade,
@@ -125,7 +134,7 @@ create or replace function public.can_see_school(s uuid) returns boolean
 language sql stable security definer set search_path = public as $$
   select public.is_super() or (s is not null and s = public.my_school()) $$;
 
--- Admin sekolah mengakses semua kelas di sekolahnya; guru hanya kelas yang ditugaskan kepadanya.
+-- Admin sekolah mengakses semua kelas di sekolahnya; guru hanya kelas yang ia buat atau pegang.
 create or replace function public.has_class_access(c uuid) returns boolean
 language sql stable security definer set search_path = public as $$
   select exists (
@@ -161,8 +170,8 @@ create policy "profil: ubah sendiri" on public.profiles for update to authentica
   using (id = auth.uid() and public.my_kind() <> 'siswa')
   with check (id = auth.uid());
 
--- Kelas: hanya dibaca langsung; membuat, mengubah, dan menghapus lewat fungsi admin_*.
--- Guru membaca kelas yang ditugaskan; admin sekolah semua kelas di sekolahnya; admin pusat semua.
+-- Kelas: hanya dibaca langsung; membuat, mengubah, dan menghapus lewat save_class / delete_class.
+-- Guru membaca kelas yang ia pegang; admin sekolah semua kelas di sekolahnya; admin pusat semua.
 drop policy if exists "kelas: sekolah sendiri" on public.classes;
 drop policy if exists "kelas: baca" on public.classes;
 create policy "kelas: baca" on public.classes for select to authenticated using (public.has_class_access(id));
@@ -204,6 +213,14 @@ language plpgsql volatile set search_path = public, extensions as $$
 declare abc text := 'abcdefghjkmnpqrstuvwxyz23456789'; res text := ''; b bytea := gen_random_bytes(8); i int;
 begin
   for i in 0..7 loop res := res || substr(abc, (get_byte(b, i) % length(abc)) + 1, 1); end loop;
+  return res;
+end $$;
+
+create or replace function public._gen_code() returns text
+language plpgsql volatile set search_path = public, extensions as $$
+declare abc text := 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'; res text := ''; b bytea := gen_random_bytes(10); i int;
+begin
+  for i in 0..9 loop res := res || substr(abc, (get_byte(b, i) % length(abc)) + 1, 1); end loop;
   return res;
 end $$;
 
@@ -256,57 +273,24 @@ create or replace function public.admin_create_user(
 language plpgsql security definer set search_path = public, extensions, auth as $$
 declare a public.profiles := public._need_admin(); sch uuid; cl public.classes; u text := lower(trim(p_username)); new_id uuid;
 begin
-  if p_kind not in ('admin', 'guru', 'siswa') then raise exception 'Jenis akun tidak dikenal.'; end if;
+  if p_kind not in ('admin', 'guru') then raise exception 'Murid tidak memakai akun. Bagikan link sesi kepada murid.'; end if;
   if u !~ '^[a-z0-9._-]{3,30}$' then raise exception 'Nama akun 3 sampai 30 karakter: huruf kecil, angka, titik, garis bawah, atau strip.'; end if;
   if length(coalesce(p_password, '')) < 6 then raise exception 'Kata sandi minimal 6 karakter.'; end if;
   if trim(coalesce(p_name, '')) = '' then raise exception 'Isi nama pemilik akun.'; end if;
 
   sch := coalesce(a.school_id, p_school);   -- admin sekolah selalu membuat untuk sekolahnya sendiri
-  if p_kind = 'siswa' then
-    select * into cl from public.classes where id = p_class;
-    if not found or p_member is null then raise exception 'Pilih kelas dan murid untuk akun siswa.'; end if;
-    if not public._in_scope(a, cl.school_id) then raise exception 'Kelas ini bukan milik sekolah Anda.'; end if;
-    if not exists (select 1 from jsonb_array_elements(cl.members) m where (m->>'no')::int = p_member) then
-      raise exception 'Murid tidak ada di daftar kelas.';
-    end if;
-    sch := cl.school_id;
-  elsif sch is null and p_kind = 'guru' then
-    raise exception 'Pilih sekolah untuk akun guru.';
-  end if;
+  if sch is null and p_kind = 'guru' then raise exception 'Pilih sekolah untuk akun guru.'; end if;
+  if sch is not null and not exists (select 1 from public.schools where id = sch) then raise exception 'Sekolah tidak ditemukan.'; end if;
 
   begin
-    new_id := public._create_account(u, p_password, trim(p_name), p_kind, sch, nullif(trim(coalesce(p_title, '')), ''),
-                                 case when p_kind = 'siswa' then p_class end, case when p_kind = 'siswa' then p_member end, true);
+    new_id := public._create_account(u, p_password, trim(p_name), p_kind, sch, nullif(trim(coalesce(p_title, '')), ''), null, null, true);
   exception when unique_violation then
-    raise exception 'Nama akun "%" sudah dipakai, atau murid ini sudah punya akun.', u;
+    raise exception 'Nama akun "%" sudah dipakai.', u;
   end;
   return json_build_object('id', new_id, 'username', u, 'password', p_password, 'name', trim(p_name));
 end $$;
 
--- Membuat akun untuk semua murid di satu kelas yang belum punya akun.
-create or replace function public.admin_create_students(p_class uuid) returns json
-language plpgsql security definer set search_path = public, extensions, auth as $$
-declare a public.profiles := public._need_admin(); c public.classes; m jsonb; base text; uname text; pw text; res jsonb := '[]'; tries int;
-begin
-  select * into c from public.classes where id = p_class;
-  if not found then raise exception 'Kelas tidak ditemukan.'; end if;
-  if not public._in_scope(a, c.school_id) then raise exception 'Kelas ini bukan milik sekolah Anda.'; end if;
-  for m in select * from jsonb_array_elements(c.members) loop
-    continue when exists (select 1 from public.profiles where class_id = c.id and member_no = (m->>'no')::int and kind = 'siswa');
-    base := left(regexp_replace(lower(split_part(trim(m->>'name'), ' ', 1)), '[^a-z0-9]', '', 'g'), 14);
-    if length(base) < 2 then base := 'siswa'; end if;
-    tries := 0;
-    loop
-      tries := tries + 1;
-      uname := base || lpad(floor(random() * case when tries < 30 then 1000 else 100000 end)::int::text, 3, '0');
-      exit when not exists (select 1 from public.profiles where username = uname);
-    end loop;
-    pw := public._gen_pw();
-    perform public._create_account(uname, pw, m->>'name', 'siswa', c.school_id, null, c.id, (m->>'no')::int, true);
-    res := res || jsonb_build_object('no', m->'no', 'name', m->>'name', 'username', uname, 'password', pw);
-  end loop;
-  return res::json;
-end $$;
+drop function if exists public.admin_create_students(uuid);   -- murid tidak lagi memakai akun
 
 create or replace function public.admin_users() returns json
 language plpgsql stable security definer set search_path = public as $$
@@ -349,28 +333,35 @@ begin
   delete from auth.users where id = p_user;
 end $$;
 
--- Membuat atau mengubah kelas beserta daftar murid dan guru pengampunya, dalam satu langkah.
+drop function if exists public.admin_save_class(uuid, uuid, text, jsonb, uuid[]);
+drop function if exists public.admin_delete_class(uuid);
+
+-- Membuat atau mengubah kelas beserta daftar muridnya. Dipakai guru dan admin.
+-- Guru: kelas baru otomatis tercatat atas namanya; hanya bisa mengubah kelas yang ia pegang.
+-- Admin: bisa memilih guru pemegang kelas (p_teachers); admin pusat memilih sekolahnya (p_school).
 -- Nomor murid dikunci di sini: murid lama mempertahankan nomornya, murid baru mendapat nomor
--- berikutnya, dan nomor yang pernah dipakai tidak dipakai ulang (akun siswa menaut ke nomor ini).
--- p_teachers kosong (null) = penugasan guru tidak diubah.
-create or replace function public.admin_save_class(p_id uuid, p_school uuid, p_name text, p_members jsonb, p_teachers uuid[] default null) returns json
+-- berikutnya, dan nomor yang pernah dipakai tidak dipakai ulang (jawaban sesi menaut ke nomor ini).
+create or replace function public.save_class(p_id uuid, p_name text, p_members jsonb, p_school uuid default null, p_teachers uuid[] default null) returns json
 language plpgsql security definer set search_path = public as $$
 declare
-  a public.profiles := public._need_admin(); c public.classes; cid uuid; sch uuid; m jsonb;
-  old_nos int[] := '{}'; nos int[] := '{}'; res jsonb := '[]'; nxt int := 1; n int; orphan text;
+  me public.profiles; c public.classes; cid uuid; sch uuid; m jsonb;
+  old_nos int[] := '{}'; nos int[] := '{}'; res jsonb := '[]'; nxt int := 1; n int;
 begin
+  select * into me from public.profiles where id = auth.uid();
+  if not found or me.kind not in ('guru', 'admin') then raise exception 'Hanya guru atau admin yang bisa mengatur kelas.'; end if;
   if trim(coalesce(p_name, '')) = '' then raise exception 'Isi nama kelas.'; end if;
+  if length(trim(p_name)) > 80 then raise exception 'Nama kelas terlalu panjang.'; end if;
   if p_members is null or jsonb_typeof(p_members) <> 'array' then raise exception 'Daftar murid tidak valid.'; end if;
   if pg_column_size(p_members) > 200000 then raise exception 'Daftar murid terlalu besar.'; end if;
 
   if p_id is not null then
+    if not public.has_class_access(p_id) then raise exception 'Kelas tidak ditemukan.'; end if;
     select * into c from public.classes where id = p_id;
-    if not found or not public._in_scope(a, c.school_id) then raise exception 'Kelas tidak ditemukan.'; end if;
     cid := c.id; sch := c.school_id;
     select coalesce(array_agg((x->>'no')::int), '{}') into old_nos from jsonb_array_elements(c.members) x;
     nxt := greatest(c.next_no, coalesce((select max(v) + 1 from unnest(old_nos) v), 1));
   else
-    sch := coalesce(a.school_id, p_school);
+    sch := coalesce(me.school_id, p_school);
     if sch is null or not exists (select 1 from public.schools where id = sch) then raise exception 'Pilih sekolah untuk kelas ini.'; end if;
   end if;
 
@@ -382,22 +373,19 @@ begin
       n := nxt; nxt := nxt + 1;
     end if;
     nos := nos || n;
-    res := res || jsonb_build_object('no', n, 'name', trim(m->>'name'), 'g', case when m->>'g' in ('L', 'P') then m->>'g' else '' end);
+    res := res || jsonb_build_object('no', n, 'name', left(trim(m->>'name'), 100), 'g', case when m->>'g' in ('L', 'P') then m->>'g' else '' end);
   end loop;
   if jsonb_array_length(res) = 0 then raise exception 'Daftar kelas perlu minimal satu murid.'; end if;
+  if jsonb_array_length(res) > 200 then raise exception 'Satu kelas paling banyak 200 murid.'; end if;
 
   if p_id is not null then
-    select string_agg(pr.name, ', ') into orphan from public.profiles pr
-      where pr.class_id = cid and pr.kind = 'siswa' and not (pr.member_no = any(nos));
-    if orphan is not null then
-      raise exception 'Murid berikut sudah punya akun. Hapus akunnya dulu sebelum mengeluarkannya dari kelas: %', orphan;
-    end if;
     update public.classes set name = trim(p_name), members = res, next_no = nxt where id = cid;
   else
     insert into public.classes (school_id, name, members, next_no) values (sch, trim(p_name), res, nxt) returning id into cid;
+    if me.kind = 'guru' then insert into public.class_teachers (class_id, teacher_id) values (cid, me.id); end if;
   end if;
 
-  if p_teachers is not null then
+  if me.kind = 'admin' and p_teachers is not null then
     delete from public.class_teachers where class_id = cid;
     insert into public.class_teachers (class_id, teacher_id)
       select cid, pr.id from public.profiles pr where pr.id = any(p_teachers) and pr.kind = 'guru' and pr.school_id = sch;
@@ -405,14 +393,10 @@ begin
   return json_build_object('id', cid);
 end $$;
 
-create or replace function public.admin_delete_class(p_id uuid) returns void
+create or replace function public.delete_class(p_id uuid) returns void
 language plpgsql security definer set search_path = public as $$
-declare a public.profiles := public._need_admin(); c public.classes; n int;
 begin
-  select * into c from public.classes where id = p_id;
-  if not found or not public._in_scope(a, c.school_id) then raise exception 'Kelas tidak ditemukan.'; end if;
-  select count(*) into n from public.profiles where class_id = p_id and kind = 'siswa';
-  if n > 0 then raise exception 'Kelas ini masih punya % akun siswa. Hapus akun siswanya dulu.', n; end if;
+  if not public.has_class_access(p_id) then raise exception 'Kelas tidak ditemukan.'; end if;
   delete from public.classes where id = p_id;   -- sesi lama tetap ada (daftar murid sudah tersalin di sesi)
 end $$;
 
@@ -467,19 +451,20 @@ drop function if exists public.owner_add_responses(uuid, jsonb);   -- diganti cr
 drop function if exists public.create_session(uuid, text, jsonb, int);
 create or replace function public.create_session(p_class uuid, p_type text, p_config jsonb, p_days int, p_until timestamptz default null) returns json
 language plpgsql security definer set search_path = public as $$
-declare p public.profiles; c public.classes; s public.sessions;
+declare p public.profiles; c public.classes; s public.sessions; k text;
 begin
   select * into p from public.profiles where id = auth.uid();
   if not found or p.kind not in ('guru', 'admin') then raise exception 'Hanya guru atau admin yang bisa membuat sesi.'; end if;
   if p.school_id is null then raise exception 'Admin pusat tidak membuat sesi. Pakai akun admin sekolah atau guru.'; end if;
-  if not public.has_class_access(p_class) then raise exception 'Kelas tidak ditemukan atau belum ditugaskan kepada Anda.'; end if;
+  if not public.has_class_access(p_class) then raise exception 'Kelas tidak ditemukan.'; end if;
   if coalesce(length(p_type), 0) not between 1 and 40 then raise exception 'Jenis asesmen tidak dikenal.'; end if;
   if p_until is not null then
     if p_until <= now() or p_until > now() + interval '90 days' then raise exception 'Tanggal batas harus di masa depan dan paling lama 90 hari dari sekarang.'; end if;
   elsif p_days is null or p_days < 1 or p_days > 90 then raise exception 'Batas pengisian 1 sampai 90 hari.'; end if;
   select * into c from public.classes where id = p_class;
-  insert into public.sessions (school_id, owner, class_id, class_name, type, config, roster, closes_at)
-  values (c.school_id, auth.uid(), c.id, c.name, p_type, coalesce(p_config, '{}'), c.members, coalesce(p_until, now() + make_interval(days => p_days)))
+  loop k := public._gen_code(); exit when not exists (select 1 from public.sessions where code = k); end loop;
+  insert into public.sessions (school_id, owner, class_id, class_name, code, type, config, roster, closes_at)
+  values (c.school_id, auth.uid(), c.id, c.name, k, p_type, coalesce(p_config, '{}'), c.members, coalesce(p_until, now() + make_interval(days => p_days)))
   returning * into s;
   return to_json(s);
 end $$;
@@ -510,43 +495,66 @@ begin
 end $$;
 
 /* ------------------------------------------------------------------ */
-/* Fungsi untuk siswa                                                  */
+/* Pendaftaran guru (tanpa login)                                      */
 /* ------------------------------------------------------------------ */
-create or replace function public.student_sessions() returns json
+-- Daftar sekolah untuk formulir pendaftaran.
+create or replace function public.public_schools() returns json
 language sql stable security definer set search_path = public as $$
-  select coalesce(json_agg(x order by x."createdAt" desc), '[]'::json) from (
-    select s.id, s.type, s.class_name as "className", s.closes_at as "closesAt", s.created_at as "createdAt",
-           (not s.closed and now() < s.closes_at) as open,
-           exists (select 1 from public.responses r where r.session_id = s.id and r.member_no = p.member_no) as done
-    from public.sessions s join public.profiles p on p.id = auth.uid() and p.kind = 'siswa'
-    where s.class_id = p.class_id) x
-  where x.open or x.done $$;
+  select coalesce(json_agg(json_build_object('id', id, 'name', name) order by name), '[]'::json) from public.schools $$;
 
-create or replace function public.student_session(p_id uuid) returns json
+-- Guru mendaftar sendiri. Kata sandi dipilih sendiri, jadi tidak perlu diganti dan tidak disimpan
+-- dalam bentuk yang bisa dibaca admin.
+create or replace function public.register_teacher(p_username text, p_password text, p_name text, p_school uuid) returns json
+language plpgsql security definer set search_path = public, extensions, auth as $$
+declare u text := lower(trim(coalesce(p_username, ''))); new_id uuid;
+begin
+  if trim(coalesce(p_name, '')) = '' then raise exception 'Isi nama lengkap Anda.'; end if;
+  if length(trim(p_name)) > 100 then raise exception 'Nama terlalu panjang.'; end if;
+  if p_school is null or not exists (select 1 from public.schools where id = p_school) then raise exception 'Pilih sekolah Anda.'; end if;
+  if u !~ '^[a-z0-9._-]{3,30}$' then raise exception 'Nama akun 3 sampai 30 karakter: huruf kecil, angka, titik, garis bawah, atau strip.'; end if;
+  if length(coalesce(p_password, '')) < 6 then raise exception 'Kata sandi minimal 6 karakter.'; end if;
+  if length(p_password) > 72 then raise exception 'Kata sandi terlalu panjang.'; end if;
+  begin
+    new_id := public._create_account(u, p_password, trim(p_name), 'guru', p_school, null, null, null, false);
+  exception when unique_violation then
+    raise exception 'Nama akun "%" sudah dipakai. Pilih nama akun lain.', u;
+  end;
+  return json_build_object('id', new_id, 'username', u);
+end $$;
+
+/* ------------------------------------------------------------------ */
+/* Fungsi untuk murid (lewat link, tanpa akun)                         */
+/* ------------------------------------------------------------------ */
+drop function if exists public.student_sessions();
+drop function if exists public.student_session(uuid);
+drop function if exists public.submit_response(uuid, jsonb);
+
+-- Yang boleh dilihat murid lewat link: nama kelas, pertanyaan, daftar nama, siapa yang sudah mengisi.
+create or replace function public.session_public(p_code text) returns json
 language sql stable security definer set search_path = public as $$
   select json_build_object(
-    'id', s.id, 'type', s.type, 'className', s.class_name, 'config', s.config,
+    'code', s.code, 'type', s.type, 'className', s.class_name, 'config', s.config,
     'roster', (select coalesce(jsonb_agg(jsonb_build_object('no', m->'no', 'name', m->'name')), '[]'::jsonb) from jsonb_array_elements(s.roster) m),
-    'open', (not s.closed and now() < s.closes_at),
-    'done', exists (select 1 from public.responses r where r.session_id = s.id and r.member_no = p.member_no),
-    'me', p.member_no)
-  from public.sessions s join public.profiles p on p.id = auth.uid() and p.kind = 'siswa'
-  where s.id = p_id and s.class_id = p.class_id $$;
+    'filled', (select coalesce(jsonb_agg(r.member_no), '[]'::jsonb) from public.responses r where r.session_id = s.id),
+    'open', (not s.closed and now() < s.closes_at))
+  from public.sessions s where s.code = p_code $$;
 
-create or replace function public.submit_response(p_session uuid, p_answers jsonb) returns void
+-- Murid mengirim jawaban tanpa akun. Satu nama hanya bisa mengisi satu kali.
+create or replace function public.submit_response(p_code text, p_no int, p_answers jsonb) returns void
 language plpgsql security definer set search_path = public as $$
-declare p public.profiles; s public.sessions;
+declare s public.sessions;
 begin
-  select * into p from public.profiles where id = auth.uid();
-  if not found or p.kind <> 'siswa' then raise exception 'Hanya akun siswa yang bisa mengisi angket.'; end if;
-  select * into s from public.sessions where id = p_session and class_id = p.class_id;
-  if not found then raise exception 'Angket tidak ditemukan.'; end if;
+  select * into s from public.sessions where code = p_code;
+  if not found then raise exception 'Link tidak ditemukan.'; end if;
   if s.closed or now() >= s.closes_at then raise exception 'Pengisian sudah ditutup.'; end if;
-  if pg_column_size(p_answers) > 20000 then raise exception 'Jawaban terlalu besar.'; end if;
+  if not exists (select 1 from jsonb_array_elements(s.roster) m where (m->>'no')::int = p_no) then
+    raise exception 'Nama tidak ada di daftar kelas.';
+  end if;
+  if p_answers is null or pg_column_size(p_answers) > 20000 then raise exception 'Jawaban tidak valid.'; end if;
   begin
-    insert into public.responses (session_id, member_no, answers) values (s.id, p.member_no, p_answers);
+    insert into public.responses (session_id, member_no, answers) values (s.id, p_no, p_answers);
   exception when unique_violation then
-    raise exception 'Kamu sudah mengisi angket ini.';
+    raise exception 'Nama ini sudah mengisi.';
   end;
 end $$;
 
@@ -557,13 +565,17 @@ revoke execute on all functions in schema public from public, anon, authenticate
 grant execute on function public.my_school(), public.my_kind(), public.is_admin(), public.is_super(), public.can_see_school(uuid), public.has_class_access(uuid) to authenticated;
 grant execute on function
   public.admin_create_user(text, text, text, text, uuid, text, uuid, int),
-  public.admin_create_students(uuid), public.admin_users(), public.admin_set_password(uuid, text),
+  public.admin_users(), public.admin_set_password(uuid, text),
   public.admin_delete_user(uuid), public.admin_overview(),
-  public.admin_save_class(uuid, uuid, text, jsonb, uuid[]), public.admin_delete_class(uuid),
+  public.save_class(uuid, text, jsonb, uuid, uuid[]), public.delete_class(uuid),
   public.create_session(uuid, text, jsonb, int, timestamptz), public.create_sample(text, jsonb, text, jsonb, jsonb),
-  public.change_my_password(text, text),
-  public.student_sessions(), public.student_session(uuid), public.submit_response(uuid, jsonb)
+  public.change_my_password(text, text)
 to authenticated;
+-- Bisa dipanggil tanpa login: pendaftaran guru dan halaman isi angket murid.
+grant execute on function
+  public.public_schools(), public.register_teacher(text, text, text, uuid),
+  public.session_public(text), public.submit_response(text, int, jsonb)
+to anon, authenticated;
 
 /* ------------------------------------------------------------------ */
 /* Data awal: lima sekolah (ganti namanya nanti lewat dasbor admin)    */

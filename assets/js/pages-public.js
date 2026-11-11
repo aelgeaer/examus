@@ -1,4 +1,4 @@
-import { esc, $, $$, fmtShort, go, toast, homePath } from "./util.js";
+import { esc, $, $$, fmtShort, go, toast, homePath, suggestUsername } from "./util.js";
 import { store } from "./store.js";
 import { ASSESSMENTS, ICONS, SAMPLE_CLASS, SAMPLE_SOCIO, SOCIO_VARIANTS, POSTS, getPost } from "./data.js";
 import { analyze, mountSociogram, describe } from "./sociogram.js";
@@ -6,10 +6,8 @@ import { analyze, mountSociogram, describe } from "./sociogram.js";
 export function header(user, active = "") {
   const on = (k) => (k === active ? ' class="on"' : "");
   const links = !user
-    ? `<a href="#/blog"${on("blog")}>Blog</a><a class="pill" href="#/masuk">Masuk</a>`
-    : user.kind === "siswa"
-      ? `<a href="#/siswa"${on("dasbor")}>Angket</a>`
-      : user.isSuper
+    ? `<a href="#/blog"${on("blog")}>Blog</a><a href="#/daftar"${on("daftar")}>Daftar</a><a class="pill" href="#/masuk">Masuk</a>`
+    : user.isSuper
         ? `<a href="#/admin"${on("admin")}>Admin</a><a href="#/kelas"${on("kelas")}>Kelas</a>`
         : `<a href="#/dasbor"${on("dasbor")}>Dasbor</a><a href="#/kelas"${on("kelas")}>Kelas</a>${user.isAdmin ? `<a href="#/admin"${on("admin")}>Admin</a>` : ""}`;
   const menu = user ? `<details class="usermenu"><summary aria-label="Menu akun"><span class="avatar" aria-hidden="true">${esc((user.name || user.username || "?").trim().charAt(0).toUpperCase())}</span><span class="who"><b>${esc(user.name || user.username)}</b><span>${esc(user.username)}</span></span><span class="caret" aria-hidden="true">▾</span></summary>
@@ -34,22 +32,22 @@ export function footer() {
 /* ---------------- Beranda ---------------- */
 const FAQ = [
   ["Untuk siapa Examus?", "Untuk guru BK, psikolog sekolah, wali kelas, dan guru mata pelajaran dari SD sampai SMA/SMK yang ingin mengenali muridnya sebelum merencanakan layanan atau pembelajaran."],
-  ["Bagaimana murid mendapat akun?", "Murid tidak mendaftar sendiri. Admin sekolah membuatkan nama akun dan kata sandi, lalu membagikannya. Setelah masuk pertama kali, murid diminta mengganti kata sandi. Angket kelasnya muncul otomatis, tanpa aplikasi yang perlu dipasang."],
+  ["Apakah murid perlu membuat akun?", "Tidak. Anda membagikan link sesi, misalnya lewat grup WhatsApp kelas. Murid membuka link, memilih namanya dari daftar kelas, lalu menjawab dari HP. Satu nama hanya bisa mengisi satu kali, dan tidak ada aplikasi yang perlu dipasang."],
   ["Siapa yang bisa melihat hasilnya?", "Hanya guru yang membuat sesi (dan admin sekolahnya). Murid tidak melihat jawaban teman maupun hasil kelas, dan data tiap sekolah terpisah dari sekolah lain."],
   ["Apakah hasilnya sebuah diagnosis?", "Bukan. Examus adalah alat pemetaan dan skrining awal. Hasilnya membantu pertimbangan profesional Anda dan tidak menggantikan pemeriksaan klinis oleh psikolog."],
   ["Seperti apa bentuk laporannya?", "Ringkasan kelas, sosiogram, tabel per murid, dan saran tindak lanjut. Laporan bisa dicetak ke PDF dengan kop sekolah, diunduh sebagai CSV untuk Excel, atau disimpan sebagai gambar."],
-  ["Bagaimana cara mulai?", "Admin sekolah membuatkan akun Anda dan menugaskan kelas yang Anda ampu. Masuk dengan nama akun dan kata sandi dari admin, pilih kelas, lalu pilih asesmen. Murid yang sudah punya akun langsung melihat angketnya. Anda juga bisa mencoba dulu dengan kelas contoh yang sudah berisi jawaban."],
+  ["Bagaimana cara mulai?", "Daftar dengan nama lengkap dan sekolah Anda (atau minta admin sekolah membuatkan akun). Tempel daftar nama murid dari Excel atau WhatsApp, pilih asesmen, lalu bagikan linknya ke murid. Anda juga bisa mencoba dulu dengan kelas contoh yang sudah berisi jawaban."],
 ];
 
 export function landing({ user }) {
-  const cta = "#" + homePath(user);
+  const cta = user ? "#" + homePath(user) : "#/daftar";
   const html = `
   <div class="hero">
     ${header(user)}
     <div class="wrap hero-grid">
       <div class="hero-copy">
         <h1>Asesmen psikologi kelas, selesai dalam satu jam pelajaran.</h1>
-        <p class="lead">Examus membantu guru BK dan psikolog sekolah menjalankan sosiometri, angket gaya belajar, minat karier, dan kebutuhan siswa. Murid masuk dengan akun dari sekolah dan mengisi dari HP. Anda menerima peta kelas dan rekap yang siap dicetak.</p>
+        <p class="lead">Examus membantu guru BK dan psikolog sekolah menjalankan sosiometri, angket gaya belajar, minat karier, dan kebutuhan siswa. Murid cukup membuka link dari Anda dan mengisi dari HP, tanpa akun. Anda menerima peta kelas dan rekap yang siap dicetak.</p>
         <div class="actions"><a class="btn primary" href="${cta}">Buat sesi pertama</a><button class="btn white" data-scroll="cara">Lihat cara kerjanya</button></div>
         <p class="for">Untuk guru BK, psikolog sekolah, dan wali kelas.</p>
       </div>
@@ -80,11 +78,11 @@ export function landing({ user }) {
             <div class="row"><span>2&nbsp; Bella Kusuma</span><span class="tag">P</span></div>
             <div class="row"><span>3&nbsp; Cahya Ningrum</span><span class="tag">P</span></div>
           </div></div>
-        <h3>Admin menyiapkan kelas</h3><p>Admin sekolah menempel daftar nama dari Excel atau WhatsApp, lalu memilih guru pengampu tiap kelas.</p></li>
+        <h3>Tempel daftar kelas</h3><p>Salin daftar nama dari Excel atau WhatsApp. Nomor urut dan tanda L/P dikenali otomatis.</p></li>
       <li><div class="tile t2"><div class="mock" aria-hidden="true">
             <div class="url">Angket Kelas 8C</div><div class="fake-btn">Mulai mengisi</div>
           </div></div>
-        <h3>Murid masuk dan mengisi</h3><p>Angket muncul otomatis di akun murid. Mereka menjawab dari HP, tanpa perlu memilih nama.</p></li>
+        <h3>Bagikan link</h3><p>Kirim link ke grup WhatsApp kelas. Murid memilih namanya dan menjawab dari HP, tanpa akun.</p></li>
       <li><div class="tile t3"><div class="mock" aria-hidden="true">
             <div class="bar" style="width:86%"></div><div class="bar" style="width:58%"></div><div class="bar" style="width:34%"></div>
           </div></div>
@@ -103,7 +101,7 @@ export function landing({ user }) {
   </div></section>
 
   <section class="section closing"><div class="wrap"><div class="closing-card">
-    <div><h2>Coba dengan satu kelas dulu.</h2><p>Masuk dengan akun dari admin, pilih kelas yang Anda ampu, dan buka sesinya. Murid langsung melihat angketnya di akun mereka.</p><a class="btn white" href="${cta}">Buat sesi pertama</a></div>
+    <div><h2>Coba dengan satu kelas dulu.</h2><p>Daftar dengan nama dan sekolah Anda, tempel daftar kelas, lalu bagikan linknya ke grup kelas. Pantau dari HP sampai semua murid selesai.</p><a class="btn white" href="${cta}">Buat sesi pertama</a></div>
     <div class="closing-rings" aria-hidden="true"></div>
   </div></div></section>
   ${footer()}`;
@@ -166,15 +164,15 @@ export function post({ user, params }) {
 const LEGAL = {
   syarat: { title: "Syarat penggunaan", body: `
     <p>Dengan memakai Examus, Anda menyetujui hal-hal berikut.</p>
-    <h2>Pemakaian</h2><ul><li>Examus dipakai oleh pendidik dan tenaga profesional sekolah untuk keperluan layanan bimbingan dan pembelajaran.</li><li>Anda memakai Examus dengan izin sekolah dan memberi tahu murid serta orang tua tentang tujuan asesmen, sesuai aturan sekolah Anda.</li><li>Nama akun dan kata sandi hanya dipakai oleh pemiliknya dan tidak dibagikan kepada orang lain.</li></ul>
+    <h2>Pemakaian</h2><ul><li>Examus dipakai oleh pendidik dan tenaga profesional sekolah untuk keperluan layanan bimbingan dan pembelajaran.</li><li>Anda memakai Examus dengan izin sekolah dan memberi tahu murid serta orang tua tentang tujuan asesmen, sesuai aturan sekolah Anda.</li><li>Nama akun dan kata sandi hanya dipakai oleh pemiliknya dan tidak dibagikan kepada orang lain.</li><li>Link sesi hanya dibagikan kepada murid di kelas yang bersangkutan.</li></ul>
     <h2>Hasil asesmen</h2><ul><li>Hasil Examus adalah bahan pertimbangan, bukan diagnosis, bukan dasar hukuman, dan tidak menentukan nilai atau masa depan murid.</li><li>Laporan perorangan dan sosiogram bersifat rahasia dan hanya untuk guru yang berwenang.</li></ul>
-    <h2>Tanggung jawab</h2><p>Admin bertanggung jawab atas keakuratan daftar kelas yang dimasukkan, dan guru atas cara hasil asesmen digunakan di sekolah.</p>` },
+    <h2>Tanggung jawab</h2><p>Guru bertanggung jawab atas keakuratan daftar kelas yang dimasukkan dan atas cara hasil asesmen digunakan di sekolah.</p>` },
   privasi: { title: "Kebijakan privasi", body: `
     <p>Halaman ini menjelaskan data apa yang disimpan Examus dan untuk apa.</p>
-    <h2>Data yang disimpan</h2><ul><li>Akun guru, admin, dan murid: nama akun, nama, dan sekolah. Guru juga bisa mengisi perannya di sekolah.</li><li>Kata sandi: sampai pengguna menggantinya, kata sandi awal dari admin bisa dilihat admin sekolah supaya bisa dibagikan atau diatur ulang. Setelah diganti, hanya tersisa bentuk terenkripsi yang tidak bisa dibaca siapa pun.</li><li>Daftar kelas: nama murid dan jenis kelamin (L/P).</li><li>Jawaban murid atas angket yang Anda jalankan.</li></ul>
+    <h2>Data yang disimpan</h2><ul><li>Akun guru dan admin: nama akun, nama, sekolah, dan peran di sekolah. Murid tidak membuat akun.</li><li>Kata sandi disimpan terenkripsi. Bila akun dibuat oleh admin, kata sandi awalnya bisa dilihat admin sekolah sampai pemilik menggantinya.</li><li>Daftar kelas: nama murid dan jenis kelamin (L/P).</li><li>Jawaban murid atas angket yang Anda jalankan.</li></ul>
     <p>Examus tidak meminta tanggal lahir, alamat, nomor telepon, atau foto murid.</p>
-    <h2>Pemakaian data</h2><ul><li>Data murid hanya dipakai untuk menyusun laporan bagi guru yang membuat sesi.</li><li>Data tidak dijual dan tidak dipakai untuk iklan.</li><li>Guru dapat menghapus sesi miliknya dan admin dapat menghapus daftar kelas kapan saja; jawaban di dalam sesi ikut terhapus bersama sesinya.</li></ul>
-    <h2>Penyimpanan</h2><p>Data tersimpan di database dan dipisahkan per sekolah: akun sebuah sekolah tidak dapat membaca data sekolah lain. Daftar kelas hanya dapat dibaca guru yang ditugaskan dan admin sekolah yang bersangkutan. Sesi dan jawaban hanya dapat dibaca guru pembuatnya dan admin sekolah tersebut.</p>` },
+    <h2>Pemakaian data</h2><ul><li>Data murid hanya dipakai untuk menyusun laporan bagi guru yang membuat sesi.</li><li>Data tidak dijual dan tidak dipakai untuk iklan.</li><li>Guru dapat menghapus kelas dan sesi miliknya kapan saja; jawaban di dalam sesi ikut terhapus bersama sesinya.</li></ul>
+    <h2>Penyimpanan</h2><p>Data tersimpan di database dan dipisahkan per sekolah: akun sebuah sekolah tidak dapat membaca data sekolah lain. Daftar kelas hanya dapat dibaca guru yang memegangnya dan admin sekolah yang bersangkutan. Sesi dan jawaban hanya dapat dibaca guru pembuatnya dan admin sekolah tersebut. Orang yang membuka link sesi melihat nama kelas dan daftar nama murid di kelas itu supaya murid bisa memilih namanya, tetapi tidak bisa melihat jawaban siapa pun.</p>` },
 };
 export function legal({ user, params }) {
   const d = LEGAL[params.doc];
@@ -186,19 +184,20 @@ export function notFound({ user }) {
 }
 
 /* ---------------- Masuk ---------------- */
-// Tidak ada pendaftaran mandiri: nama akun dan kata sandi dibagikan oleh admin sekolah.
+// Guru mendaftar sendiri di /daftar, atau dibuatkan akun oleh admin sekolah. Murid tidak masuk.
 export function login({ user, query }) {
   const next = query.get("lanjut") || "";
-  const html = `${header(null)}<main class="page"><div class="narrow" style="max-width:460px">
+  const html = `${header(null, "masuk")}<main class="page"><div class="narrow" style="max-width:460px">
     <h1 class="page-title">Masuk</h1>
-    <p class="page-sub">Masuk dengan nama akun dan kata sandi dari admin sekolah Anda.</p>
+    <p class="page-sub">Untuk guru dan admin sekolah.</p>
     <form id="lg" novalidate>
       <label class="field"><span>Nama akun</span><input type="text" name="username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required></label>
       <label class="field"><span>Kata sandi</span><input type="password" name="pw" autocomplete="current-password" required></label>
       <p class="err" id="lg-err" role="alert"></p>
       <button class="btn primary block" id="lg-go">Masuk</button>
     </form>
-    <p class="muted small" style="margin-top:1.2rem">Belum punya akun atau lupa kata sandi? Hubungi admin sekolah Anda. Pendaftaran tidak dilakukan sendiri.</p>
+    <p style="margin-top:1.2rem">Belum punya akun? <a href="#/daftar">Daftar sebagai guru</a></p>
+    <p class="muted small" style="margin-top:.8rem">Lupa kata sandi? Hubungi admin sekolah Anda untuk mengaturnya ulang. Murid tidak perlu masuk: cukup buka link angket dari guru.</p>
     <p class="muted small" style="margin-top:.8rem">Dengan masuk, Anda menyetujui <a href="#/syarat">Syarat penggunaan</a> dan <a href="#/privasi">Kebijakan privasi</a> Examus.</p>
   </div></main>`;
   return {
@@ -218,6 +217,46 @@ export function login({ user, query }) {
           go(u.mustChange ? "/ganti-sandi" : next && !next.startsWith("/masuk") ? next : homePath(u));
         } catch (ex) { err.textContent = ex.message; }
         btn.disabled = false;
+      });
+    },
+  };
+}
+
+/* ---------------- Daftar (guru) ---------------- */
+export async function register({ user }) {
+  if (user) { go(homePath(user)); return { html: "" }; }
+  const schools = await store.publicSchools();
+  const html = `${header(null, "daftar")}<main class="page"><div class="narrow" style="max-width:460px">
+    <h1 class="page-title">Daftar sebagai guru</h1>
+    <p class="page-sub">Cukup nama dan sekolah Anda. Setelah itu Anda bisa langsung membuat kelas dan membagikan angket ke murid.</p>
+    <form id="rg" novalidate>
+      <label class="field"><span>Nama lengkap</span><input type="text" name="name" autocomplete="name" required><span class="hint">Boleh dengan gelar. Tampil di laporan yang dicetak.</span></label>
+      <label class="field"><span>Sekolah</span><select name="school" class="btn" style="width:100%;text-align:left" required><option value="">Pilih sekolah</option>${schools.map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join("")}</select></label>
+      <label class="field"><span>Nama akun</span><input type="text" name="username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required><span class="hint">Dipakai untuk masuk. Huruf kecil, angka, titik, garis bawah, atau strip.</span></label>
+      <label class="field"><span>Kata sandi</span><input type="password" name="pw" autocomplete="new-password" required><span class="hint">Minimal 6 karakter.</span></label>
+      <p class="err" id="rg-err" role="alert"></p>
+      <button class="btn primary block" id="rg-go">Daftar</button>
+    </form>
+    <p style="margin-top:1.2rem">Sudah punya akun? <a href="#/masuk">Masuk</a></p>
+  </div></main>`;
+  return {
+    title: "Daftar",
+    html,
+    mount(root) {
+      const form = $("#rg", root), err = $("#rg-err", root), btn = $("#rg-go", root);
+      let touched = false;
+      form.name.addEventListener("input", () => { if (!touched) form.username.value = suggestUsername(form.name.value); });
+      form.username.addEventListener("input", () => { touched = true; });
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault(); err.textContent = "";
+        const data = { name: form.name.value.trim(), schoolId: form.school.value, username: form.username.value.trim().toLowerCase(), password: form.pw.value };
+        if (!data.name) { err.textContent = "Isi nama lengkap Anda."; form.name.focus(); return; }
+        if (!data.schoolId) { err.textContent = "Pilih sekolah Anda."; return; }
+        if (!/^[a-z0-9._-]{3,30}$/.test(data.username)) { err.textContent = "Nama akun 3 sampai 30 karakter: huruf kecil, angka, titik, garis bawah, atau strip."; form.username.focus(); return; }
+        if (data.password.length < 6) { err.textContent = "Kata sandi minimal 6 karakter."; form.pw.focus(); return; }
+        btn.disabled = true;
+        try { await store.register(data); toast("Akun dibuat"); go("/kenalan"); }
+        catch (ex) { err.textContent = ex.message; btn.disabled = false; }
       });
     },
   };

@@ -1,23 +1,19 @@
 # Examus by prepod
 
-Platform asesmen psikologi untuk sekolah. Guru BK dan psikolog sekolah membuat sesi, murid mengisi dari HP lewat akunnya, dan laporan tersusun otomatis.
+Platform asesmen psikologi untuk sekolah. Guru BK dan psikolog sekolah membuat sesi, membagikan link ke murid, murid mengisi dari HP tanpa akun, dan laporan tersusun otomatis.
 
 Asesmen yang sudah berjalan: sosiometri (dengan sosiogram interaktif), gaya belajar, minat karier (RIASEC), dan kebutuhan siswa.
 
 ## Cara kerja akun
 
-- **Tidak ada pendaftaran mandiri.** Semua akun (admin, guru, murid) dibuat oleh admin.
+- **Guru mendaftar sendiri** di halaman Daftar: nama lengkap, pilih sekolah (salah satu dari lima), nama akun, dan kata sandi. Admin juga bisa **membuatkan akun guru** bila perlu; akun buatan admin wajib mengganti sandi saat masuk pertama.
 - **Masuk dengan nama akun dan kata sandi**, tanpa email.
-- Admin membagikan nama akun dan kata sandi awal. Saat masuk pertama kali, pengguna **wajib menggantinya**.
-- Admin bisa **melihat kata sandi awal** selama pemilik belum menggantinya, dan bisa **mengatur ulang** bila lupa. Setelah pemilik mengganti sandi, salinan yang terlihat admin dihapus dan hanya tersisa hash yang tidak bisa dibaca siapa pun.
-- Guru dan murid bisa **mengganti kata sandi sendiri** di halaman Akun.
-- Admin bisa **menambah admin baru**.
-- **Kelas dan daftar murid hanya dibuat admin.** Admin menempel daftar nama (dari Excel atau WhatsApp) dan memilih **guru pengampu** tiap kelas. Satu guru boleh memegang banyak kelas, dan satu kelas boleh punya beberapa guru. Guru hanya melihat kelas yang ditugaskan kepadanya dan membuat sesi asesmen untuk kelas itu.
+- **Guru membuat kelasnya sendiri** dengan menempel daftar nama dari Excel atau WhatsApp. Admin sekolah melihat semua kelas di sekolahnya dan boleh menambahkan guru lain sebagai pemegang kelas.
+- **Murid tidak punya akun.** Guru membagikan link sesi (WhatsApp, salin link, atau kode QR). Murid membuka link, memilih namanya, lalu mengisi. Satu nama hanya bisa mengisi sekali.
+- Admin bisa **melihat kata sandi awal** akun yang ia buat selama pemilik belum menggantinya, dan bisa **mengatur ulang** bila lupa. Admin bisa **menambah admin baru**.
 - **Lima sekolah dalam satu database, datanya terpisah.** Setiap data punya `school_id` dan Row Level Security mencegah akun satu sekolah membaca data sekolah lain.
   - *Admin sekolah* mengelola akun dan melihat data sekolahnya saja.
   - *Admin pusat* (dibuat tanpa sekolah) melihat semua sekolah, mengganti nama sekolah, dan membuat admin sekolah.
-
-Alur murid: admin membuat akun murid untuk satu kelas (satu klik, dari daftar kelas yang dibuat admin), membagikan daftar nama akun dan kata sandinya (bisa diunduh sebagai CSV), lalu murid login dan angket kelasnya muncul otomatis. Link publik untuk murid sudah tidak ada.
 
 ## Struktur
 
@@ -49,7 +45,7 @@ Tidak ada proses build. Semua file statis.
    Fungsi ini hanya bisa dijalankan dari SQL Editor dan menolak bila admin sudah ada.
 4. Buka Project Settings > API. Salin **Project URL** dan kunci **anon public**, lalu isi di `assets/js/config.js`.
 5. Pastikan `USERNAME_DOMAIN` di `config.js` sama dengan `_account_domain()` di `schema.sql` (bawaan: `examus.local`). Ini hanya email di balik layar; pengguna tidak pernah melihatnya.
-6. Di Authentication > Providers > Email, boleh matikan "Allow new users to sign up" agar tidak ada yang bisa mendaftar lewat API Supabase langsung.
+6. Di Authentication > Providers > Email, matikan "Allow new users to sign up". Pendaftaran guru tetap berjalan lewat fungsi database, bukan lewat pendaftaran Supabase.
 
 Kunci `anon public` aman diletakkan di kode publik. Yang menjaga data adalah Row Level Security di `schema.sql`.
 
@@ -62,21 +58,20 @@ Kunci `anon public` aman diletakkan di kode publik. Yang menjaga data adalah Row
 ## Pertama kali dipakai
 
 1. Masuk sebagai admin pusat (nama akun dan sandi dari langkah 3 di atas).
-2. Di Dasbor admin > Sekolah, ganti nama kelima sekolah.
-3. Buat akun **admin sekolah** untuk tiap sekolah (Tambah satu akun > Admin, pilih sekolahnya) dan akun **guru**.
-4. Di menu **Kelas**, admin membuat kelas, menempel nama murid, dan mencentang guru pengampunya.
-5. Guru masuk, mengganti sandi, lalu memilih kelasnya dan memulai asesmen.
-6. Admin membuka **Buat akun untuk satu kelas sekaligus**, memilih kelas, mengunduh CSV, dan membagikannya ke murid.
+2. Di Dasbor admin > Sekolah, ganti nama kelima sekolah. Nama inilah yang dipilih guru saat mendaftar.
+3. Bila perlu, buat akun **admin sekolah** untuk tiap sekolah (Tambah satu akun > Admin, pilih sekolahnya).
+4. Guru membuka situs, klik **Daftar**, mengisi nama dan sekolah, lalu membuat kelas dan memulai asesmen.
+5. Di halaman sesi, guru mengirim link ke grup WhatsApp kelas dan memantau jumlah murid yang sudah mengisi.
 
 ## Catatan penting
 
-- **Nomor murid dikunci di server.** Akun murid menaut ke nomor murid di daftar kelas. Murid lama mempertahankan nomornya, murid baru mendapat nomor berikutnya, dan nomor yang pernah dipakai tidak dipakai ulang. Murid yang sudah punya akun tidak bisa dikeluarkan dari kelas, dan kelas yang masih punya akun siswa tidak bisa dihapus, sebelum akun siswanya dihapus.
-- **Menghapus akun guru** memindahkan sesinya ke admin yang menghapus dan melepas penugasan kelasnya. Kelasnya sendiri tidak terpengaruh.
-- **Sesi dibuat di server** (`create_session`): nama kelas dan daftar murid diambil dari database, bukan dari kiriman browser, dan hanya untuk kelas yang boleh diakses pembuatnya.
-- **Admin pusat tidak membuat sesi** karena tidak punya sekolah (tetapi bisa membuat kelas untuk sekolah yang dipilih). Gunakan akun admin sekolah atau guru untuk sesi.
-- **Sesi contoh** di dasbor guru membuat "Kelas contoh" yang hanya ditugaskan kepada guru itu. Admin bisa menghapusnya dari menu Kelas.
-- **Memperbarui proyek yang sudah berjalan:** tempel ulang seluruh `supabase/schema.sql` di SQL Editor dan Run. Skema lama (kelas milik guru) ditingkatkan tanpa menghapus data: kelas lama otomatis ditugaskan ke guru pembuatnya.
-- Fungsi pembuatan akun menulis langsung ke tabel `auth` Supabase. Skema `auth` bisa berubah antarversi Supabase; uji satu alur lengkap (buat akun, login, ganti sandi) sebelum dipakai sungguhan. Kode ini belum diuji terhadap proyek Supabase sungguhan.
+- **Pendaftaran guru lewat fungsi `register_teacher`**, bukan lewat pendaftaran Supabase, jadi pengaturan "Allow new users to sign up" boleh tetap mati. Siapa pun yang membuka situs bisa mendaftar sebagai guru di salah satu sekolah; admin sekolah bisa menghapus akun yang tidak dikenal.
+- **Link murid** memuat kode acak 10 karakter. Siapa pun yang memegang link bisa melihat nama kelas dan daftar nama murid, dan bisa mengisi atas nama murid yang belum mengisi. Bagikan hanya ke grup kelas, dan tutup sesi bila sudah selesai.
+- **Nomor murid dikunci di server.** Murid lama mempertahankan nomornya saat daftar kelas diubah, murid baru mendapat nomor berikutnya, dan nomor lama tidak dipakai ulang, supaya jawaban di sesi lama tidak tertukar.
+- **Sesi dibuat di server** (`create_session`): nama kelas dan daftar murid diambil dari database, hanya untuk kelas yang boleh diakses pembuatnya.
+- **Admin pusat tidak membuat sesi** karena tidak punya sekolah. Gunakan akun admin sekolah atau guru.
+- **Memperbarui proyek yang sudah berjalan:** tempel ulang seluruh `supabase/schema.sql` di SQL Editor dan Run. Data lama tetap ada; sesi lama otomatis mendapat link. Akun murid dari versi sebelumnya tidak bisa dipakai masuk lagi dan bisa dihapus admin dari tabel Akun.
+- Fungsi pembuatan akun menulis langsung ke tabel `auth` Supabase. Skema `auth` bisa berubah antarversi Supabase; uji satu alur lengkap (daftar, login, ganti sandi) sebelum dipakai sungguhan.
 
 ## Sebelum dipakai dengan murid sungguhan
 

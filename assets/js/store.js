@@ -29,7 +29,7 @@ async function makeSupabase() {
     name: p.name || "", role: p.title || "", school: p.schools?.name || "", schoolId: p.school_id || null,
     onboarded: !!p.onboarded, mustChange: !!p.must_change, classId: p.class_id || null, memberNo: p.member_no ?? null,
   };
-  const sess = (s) => s && { id: s.id, classId: s.class_id, className: s.class_name, type: s.type, config: s.config, roster: s.roster, closesAt: s.closes_at, closed: s.closed, createdAt: s.created_at, filledCount: s.responses?.[0]?.count ?? 0 };
+  const sess = (s) => s && { id: s.id, classId: s.class_id, className: s.class_name, code: s.code, type: s.type, config: s.config, roster: s.roster, closesAt: s.closes_at, closed: s.closed, createdAt: s.created_at, filledCount: s.responses?.[0]?.count ?? 0 };
   const cls = (c) => c && { id: c.id, name: c.name, members: c.members, schoolId: c.school_id, createdAt: c.created_at };
   const userId = async () => { const { data } = await sb.auth.getSession(); if (!data.session) throw new Error("Sesi masuk berakhir. Masuk lagi."); return data.session.user.id; };
   const PROFILE = "*, schools(name)";
@@ -41,9 +41,21 @@ async function makeSupabase() {
       if (!data.session) return null;
       const p = must(await sb.from("profiles").select(PROFILE).eq("id", data.session.user.id).maybeSingle());
       if (!p) { await sb.auth.signOut(); return null; }   // akun sudah dihapus admin
+      if (p.kind === "siswa") { await sb.auth.signOut(); return null; }   // akun murid versi lama tidak dipakai lagi
       return prof(p);
     },
-    async signIn(username, pw) { must(await sb.auth.signInWithPassword({ email: emailOf(username), password: pw })); return this.me(); },
+    async signIn(username, pw) {
+      must(await sb.auth.signInWithPassword({ email: emailOf(username), password: pw }));
+      const u = await this.me();
+      if (!u) throw new Error("Murid tidak perlu masuk. Buka link angket yang dibagikan gurumu.");
+      return u;
+    },
+    // Guru mendaftar sendiri, lalu langsung masuk.
+    async publicSchools() { return must(await sb.rpc("public_schools")); },
+    async register({ username, password, name, schoolId }) {
+      must(await sb.rpc("register_teacher", { p_username: username, p_password: password, p_name: name, p_school: schoolId }));
+      return this.signIn(username, password);
+    },
     async signOut() { await sb.auth.signOut(); },
     async changePassword(oldPw, newPw) { must(await sb.rpc("change_my_password", { p_old: oldPw, p_new: newPw })); },
     async updateProfile(patch) {
@@ -53,10 +65,14 @@ async function makeSupabase() {
       return prof(must(await sb.from("profiles").update(row).eq("id", await userId()).select(PROFILE).single()));
     },
 
-    // Kelas hanya dibaca di sini; membuat dan mengubahnya lewat fungsi admin. Aturan akses database
-    // menentukan isinya: guru melihat kelas yang ditugaskan, admin semua kelas di sekolahnya.
+    // Aturan akses database menentukan isinya: guru melihat kelas yang ia buat atau pegang,
+    // admin semua kelas di sekolahnya. Menyimpan dan menghapus lewat fungsi server.
     async listClasses() { return must(await sb.from("classes").select("*").order("name")).map(cls); },
     async getClass(id) { return cls(must(await sb.from("classes").select("*").eq("id", id).maybeSingle())); },
+    async saveClass({ id, schoolId, name, members, teachers }) {
+      return must(await sb.rpc("save_class", { p_id: id || null, p_name: name, p_members: members, p_school: schoolId || null, p_teachers: teachers ?? null }));
+    },
+    async deleteClass(id) { must(await sb.rpc("delete_class", { p_id: id })); },
     async classTeachers(classId) { return must(await sb.from("class_teachers").select("teacher_id").eq("class_id", classId)).map((r) => r.teacher_id); },
 
     async listSessions() { return must(await sb.from("sessions").select("*, responses(count)").eq("owner", await userId()).order("created_at", { ascending: false })).map(sess); },
@@ -78,23 +94,17 @@ async function makeSupabase() {
       })));
     },
 
-    // Siswa
-    async studentSessions() { return must(await sb.rpc("student_sessions")); },
-    async studentSession(id) { return must(await sb.rpc("student_session", { p_id: id })); },
-    async submit(sessionId, answers) { must(await sb.rpc("submit_response", { p_session: sessionId, p_answers: answers })); },
+    // Murid (lewat link, tanpa akun)
+    async publicSession(code) { return must(await sb.rpc("session_public", { p_code: code })); },
+    async submit(code, no, answers) { must(await sb.rpc("submit_response", { p_code: code, p_no: no, p_answers: answers })); },
 
     // Admin
     async admin() { return must(await sb.rpc("admin_overview")); },
     async adminUsers() { return must(await sb.rpc("admin_users")); },
     async adminClasses() { return this.listClasses(); },
-    async adminSaveClass({ id, schoolId, name, members, teachers }) {
-      return must(await sb.rpc("admin_save_class", { p_id: id || null, p_school: schoolId || null, p_name: name, p_members: members, p_teachers: teachers ?? null }));
-    },
-    async adminDeleteClass(id) { must(await sb.rpc("admin_delete_class", { p_id: id })); },
     async adminCreateUser(u) {
-      return must(await sb.rpc("admin_create_user", { p_username: u.username, p_password: u.password, p_name: u.name, p_kind: u.kind, p_school: u.schoolId || null, p_title: u.title || null, p_class: u.classId || null, p_member: u.memberNo ?? null }));
+      return must(await sb.rpc("admin_create_user", { p_username: u.username, p_password: u.password, p_name: u.name, p_kind: u.kind, p_school: u.schoolId || null, p_title: u.title || null, p_class: null, p_member: null }));
     },
-    async adminCreateStudents(classId) { return must(await sb.rpc("admin_create_students", { p_class: classId })); },
     async adminSetPassword(id, pw) { must(await sb.rpc("admin_set_password", { p_user: id, p_password: pw })); },
     async adminDeleteUser(id) { must(await sb.rpc("admin_delete_user", { p_user: id })); },
     async schools() { return must(await sb.from("schools").select("id, name").order("name")); },
