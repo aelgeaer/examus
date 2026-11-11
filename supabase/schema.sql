@@ -54,6 +54,9 @@ create table if not exists public.profiles (
   created_at timestamptz not null default now(),
   check (kind = 'admin' or school_id is not null)
 );
+-- Guru yang mendaftar sendiri menunggu persetujuan admin sebelum boleh membuat kelas dan sesi.
+-- Akun yang sudah ada dan akun buatan admin langsung disetujui.
+alter table public.profiles add column if not exists approved boolean not null default true;
 create unique index if not exists one_account_per_member on public.profiles (class_id, member_no) where kind = 'siswa';
 
 create table if not exists public.credentials (
@@ -141,6 +144,34 @@ create or replace function public.is_super() returns boolean
 language sql stable security definer set search_path = public as $$
   select coalesce((select kind = 'admin' and school_id is null from profiles where id = auth.uid()), false) $$;
 
+create or replace function public.is_approved() returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce((select approved from profiles where id = auth.uid()), false) $$;
+
+-- Aturan kata sandi untuk guru: 6-72 karakter, ada huruf dan angka, tanpa tiga angka berurutan (123, 987).
+create or replace function public._check_password(p text) returns void
+language plpgsql immutable set search_path = public as $$
+declare i int; d text := '0123456789';
+begin
+  if length(coalesce(p, '')) < 6 then raise exception 'Kata sandi minimal 6 karakter.'; end if;
+  if length(p) > 72 then raise exception 'Kata sandi terlalu panjang.'; end if;
+  if p !~ '[A-Za-z]' then raise exception 'Kata sandi harus memuat huruf.'; end if;
+  if p !~ '[0-9]' then raise exception 'Kata sandi harus memuat angka.'; end if;
+  for i in 1..8 loop
+    if strpos(p, substr(d, i, 3)) > 0 or strpos(p, reverse(substr(d, i, 3))) > 0 then
+      raise exception 'Kata sandi tidak boleh memuat tiga angka berurutan seperti 123 atau 987.';
+    end if;
+  end loop;
+end $$;
+
+create or replace function public._need_approved() returns void
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.is_approved() then
+    raise exception 'Akun Anda menunggu persetujuan admin. Setelah disetujui, Anda bisa membuat kelas dan sesi.';
+  end if;
+end $$;
+
 create or replace function public.can_see_school(s uuid) returns boolean
 language sql stable security definer set search_path = public as $$
   select public.is_super() or (s is not null and s = public.my_school()) $$;
@@ -206,7 +237,7 @@ create policy "jawaban: baca" on public.responses for select to authenticated
 
 drop policy if exists "angket: milik sendiri" on public.questionnaires;
 create policy "angket: milik sendiri" on public.questionnaires for all to authenticated
-  using (owner = auth.uid()) with check (owner = auth.uid() and public.my_kind() in ('guru', 'admin'));
+  using (owner = auth.uid()) with check (owner = auth.uid() and public.my_kind() in ('guru', 'admin') and public.is_approved());
 
 -- Hak akses tabel. credentials sama sekali tidak bisa diakses langsung.
 revoke all on all tables in schema public from anon, authenticated;
@@ -318,12 +349,23 @@ begin
   return (select coalesce(json_agg(x order by x.kind, x.name), '[]'::json) from (
     select p.id, p.username, p.name, p.kind, p.title, p.school_id as "schoolId", s.name as school,
            p.class_id as "classId", c.name as "className", p.member_no as "memberNo",
-           cr.password, p.must_change as "mustChange", p.created_at as "createdAt"
+           cr.password, p.must_change as "mustChange", p.approved, p.created_at as "createdAt"
     from public.profiles p
     left join public.schools s on s.id = p.school_id
     left join public.classes c on c.id = p.class_id
     left join public.credentials cr on cr.user_id = p.id
     where a.school_id is null or p.school_id = a.school_id) x);
+end $$;
+
+-- Admin menyetujui (atau mencabut persetujuan) guru yang mendaftar sendiri.
+create or replace function public.admin_approve_user(p_user uuid, p_approved boolean default true) returns void
+language plpgsql security definer set search_path = public as $$
+declare a public.profiles := public._need_admin(); t public.profiles;
+begin
+  select * into t from public.profiles where id = p_user;
+  if not found or not public._in_scope(a, t.school_id) then raise exception 'Akun tidak ditemukan.'; end if;
+  if t.kind <> 'guru' then raise exception 'Hanya akun guru yang perlu disetujui.'; end if;
+  update public.profiles set approved = coalesce(p_approved, true) where id = p_user;
 end $$;
 
 create or replace function public.admin_set_password(p_user uuid, p_password text) returns void
@@ -368,6 +410,7 @@ declare
 begin
   select * into me from public.profiles where id = auth.uid();
   if not found or me.kind not in ('guru', 'admin') then raise exception 'Hanya guru atau admin yang bisa mengatur kelas.'; end if;
+  perform public._need_approved();
   if trim(coalesce(p_name, '')) = '' then raise exception 'Isi nama kelas.'; end if;
   if length(trim(p_name)) > 80 then raise exception 'Nama kelas terlalu panjang.'; end if;
   if p_members is null or jsonb_typeof(p_members) <> 'array' then raise exception 'Daftar murid tidak valid.'; end if;
@@ -450,7 +493,7 @@ create or replace function public.change_my_password(p_old text, p_new text) ret
 language plpgsql security definer set search_path = public, extensions, auth as $$
 begin
   if auth.uid() is null then raise exception 'Sesi masuk berakhir. Masuk lagi.'; end if;
-  if length(coalesce(p_new, '')) < 6 then raise exception 'Kata sandi baru minimal 6 karakter.'; end if;
+  perform public._check_password(p_new);
   if p_new = p_old then raise exception 'Kata sandi baru harus berbeda dari yang lama.'; end if;
   if not exists (select 1 from auth.users where id = auth.uid() and encrypted_password = crypt(p_old, encrypted_password)) then
     raise exception 'Kata sandi saat ini tidak cocok.';
@@ -474,6 +517,7 @@ declare p public.profiles; c public.classes; s public.sessions; k text;
 begin
   select * into p from public.profiles where id = auth.uid();
   if not found or p.kind not in ('guru', 'admin') then raise exception 'Hanya guru atau admin yang bisa membuat sesi.'; end if;
+  perform public._need_approved();
   if p.school_id is null then raise exception 'Admin pusat tidak membuat sesi. Pakai akun admin sekolah atau guru.'; end if;
   if not public.has_class_access(p_class) then raise exception 'Kelas tidak ditemukan.'; end if;
   if coalesce(length(p_type), 0) not between 1 and 40 then raise exception 'Jenis asesmen tidak dikenal.'; end if;
@@ -497,6 +541,7 @@ declare p public.profiles; c public.classes; s json; r jsonb; mx int;
 begin
   select * into p from public.profiles where id = auth.uid();
   if not found or p.kind not in ('guru', 'admin') or p.school_id is null then raise exception 'Hanya guru atau admin sekolah yang bisa membuat sesi contoh.'; end if;
+  perform public._need_approved();
   if pg_column_size(p_members) + pg_column_size(p_rows) > 300000 then raise exception 'Data contoh terlalu besar.'; end if;
   select k.* into c from public.classes k
     join public.class_teachers t on t.class_id = k.id and t.teacher_id = p.id
@@ -532,10 +577,10 @@ begin
   if length(trim(p_name)) > 100 then raise exception 'Nama terlalu panjang.'; end if;
   if p_school is null or not exists (select 1 from public.schools where id = p_school) then raise exception 'Pilih sekolah Anda.'; end if;
   if u !~ '^[a-z0-9._-]{3,30}$' then raise exception 'Nama akun 3 sampai 30 karakter: huruf kecil, angka, titik, garis bawah, atau strip.'; end if;
-  if length(coalesce(p_password, '')) < 6 then raise exception 'Kata sandi minimal 6 karakter.'; end if;
-  if length(p_password) > 72 then raise exception 'Kata sandi terlalu panjang.'; end if;
+  perform public._check_password(p_password);
   begin
     new_id := public._create_account(u, p_password, trim(p_name), 'guru', p_school, null, null, null, false);
+    update public.profiles set approved = false where id = new_id;   -- menunggu persetujuan admin
   exception when unique_violation then
     raise exception 'Nama akun "%" sudah dipakai. Pilih nama akun lain.', u;
   end;
@@ -582,11 +627,11 @@ end $$;
 /* Hak menjalankan fungsi                                              */
 /* ------------------------------------------------------------------ */
 revoke execute on all functions in schema public from public, anon, authenticated;
-grant execute on function public.my_school(), public.my_kind(), public.is_admin(), public.is_super(), public.can_see_school(uuid), public.has_class_access(uuid) to authenticated;
+grant execute on function public.my_school(), public.my_kind(), public.is_admin(), public.is_super(), public.can_see_school(uuid), public.has_class_access(uuid), public.is_approved() to authenticated;
 grant execute on function
   public.admin_create_user(text, text, text, text, uuid, text, uuid, int),
   public.admin_users(), public.admin_set_password(uuid, text),
-  public.admin_delete_user(uuid), public.admin_overview(),
+  public.admin_delete_user(uuid), public.admin_overview(), public.admin_approve_user(uuid, boolean),
   public.save_class(uuid, text, jsonb, uuid, uuid[]), public.delete_class(uuid),
   public.create_session(uuid, text, jsonb, int, timestamptz), public.create_sample(text, jsonb, text, jsonb, jsonb),
   public.change_my_password(text, text)

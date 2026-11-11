@@ -90,12 +90,40 @@ export const studentLink = (code) => siteBase() + "#/s/" + code;
 // Halaman awal setelah masuk, sesuai jenis akun.
 export const homePath = (user) => (!user ? "/masuk" : user.isSuper ? "/admin" : "/dasbor");
 
-// Kata sandi acak 8 karakter tanpa huruf yang mudah tertukar (l, i, o, 0, 1).
+// Aturan kata sandi guru: minimal 6 karakter, ada huruf dan angka, tanpa tiga angka berurutan (123, 987).
+// Mengembalikan pesan kesalahan, atau "" bila sandi memenuhi aturan. Aturan yang sama dipasang di database.
+export function passwordIssue(pw) {
+  const p = String(pw || "");
+  if (p.length < 6) return "Kata sandi minimal 6 karakter.";
+  if (p.length > 72) return "Kata sandi terlalu panjang.";
+  if (!/[A-Za-z]/.test(p)) return "Kata sandi harus memuat huruf.";
+  if (!/[0-9]/.test(p)) return "Kata sandi harus memuat angka.";
+  for (let i = 0; i <= 7; i++) {
+    const t = "0123456789".slice(i, i + 3);
+    if (p.includes(t) || p.includes([...t].reverse().join(""))) return "Kata sandi tidak boleh memuat tiga angka berurutan seperti 123 atau 987.";
+  }
+  return "";
+}
+export const PASSWORD_HINT = "Minimal 6 karakter, memuat huruf dan angka, dan tanpa tiga angka berurutan (misalnya 123).";
+
+// Kata sandi acak 8 karakter tanpa huruf yang mudah tertukar (l, i, o, 0, 1), selalu memenuhi aturan di atas.
 export function genPassword(len = 8) {
   const abc = "abcdefghjkmnpqrstuvwxyz23456789";
-  const buf = new Uint32Array(len);
-  crypto.getRandomValues(buf);
-  return [...buf].map((n) => abc[n % abc.length]).join("");
+  for (;;) {
+    const buf = new Uint32Array(len);
+    crypto.getRandomValues(buf);
+    const pw = [...buf].map((n) => abc[n % abc.length]).join("");
+    if (!passwordIssue(pw)) return pw;
+  }
+}
+
+// Nama lengkap: huruf pertama tiap kata kapital. Bila ditulis semua kapital atau semua kecil, sisanya dikecilkan;
+// bila campuran (misalnya gelar "S.Pd."), huruf lainnya dibiarkan seperti yang diketik.
+export function titleName(name) {
+  const s = String(name || "").trim().replace(/\s+/g, " ");
+  if (!s) return "";
+  const mixed = s !== s.toLocaleUpperCase("id-ID") && s !== s.toLocaleLowerCase("id-ID");
+  return s.split(" ").map((w) => w.charAt(0).toLocaleUpperCase("id-ID") + (mixed ? w.slice(1) : w.slice(1).toLocaleLowerCase("id-ID"))).join(" ");
 }
 
 // Nama akun usulan dari nama lengkap: "Arya Wibowo" -> "arya.wibowo".

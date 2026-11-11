@@ -67,8 +67,7 @@ async function render() {
     const user = await store.me();
     if (auth && !user) { go("/masuk?lanjut=" + encodeURIComponent(path)); return; }
     if (user) {
-      // Akun baru wajib mengganti kata sandi dari admin sebelum memakai apa pun.
-      if (user.mustChange && page !== changePassword) { go("/ganti-sandi"); return; }
+      // Akun buatan admin diarahkan ke halaman ganti kata sandi saat masuk, tetapi boleh dilewati.
       if (auth === "admin" && !user.isAdmin) { go(homePath(user)); return; }
       if (page === dashboard && user.isSuper) { go("/admin"); return; }
       if (auth === "staff" && user.kind === "guru" && !user.onboarded && page !== onboarding) { go("/kenalan"); return; }

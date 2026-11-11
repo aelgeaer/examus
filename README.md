@@ -70,6 +70,8 @@ Kunci `anon public` aman diletakkan di kode publik. Yang menjaga data adalah Row
 - **Link murid** memuat kode acak 10 karakter. Siapa pun yang memegang link bisa melihat nama kelas dan daftar nama murid, dan bisa mengisi atas nama murid yang belum mengisi. Bagikan hanya ke grup kelas, dan tutup sesi bila sudah selesai.
 - **Nomor murid dikunci di server.** Murid lama mempertahankan nomornya saat daftar kelas diubah, murid baru mendapat nomor berikutnya, dan nomor lama tidak dipakai ulang, supaya jawaban di sesi lama tidak tertukar.
 - **Sesi dibuat di server** (`create_session`): nama kelas dan daftar murid diambil dari database, hanya untuk kelas yang boleh diakses pembuatnya.
+- **Persetujuan guru.** Guru yang mendaftar sendiri belum bisa membuat kelas atau sesi sampai disetujui admin (tombol Setujui di tabel Akun, dasbor admin). Akun buatan admin langsung disetujui, begitu juga akun yang sudah ada sebelum fitur ini. Dijaga di database, bukan hanya di tampilan.
+- **Aturan kata sandi** (daftar sendiri dan ganti sandi): minimal 6 karakter, ada huruf dan angka, tanpa tiga angka berurutan seperti 123 atau 987.
 - **Admin pusat tidak membuat sesi** karena tidak punya sekolah. Gunakan akun admin sekolah atau guru.
 - **Memperbarui proyek yang sudah berjalan:** tempel ulang seluruh `supabase/schema.sql` di SQL Editor dan Run. Data lama tetap ada; sesi lama otomatis mendapat link. Akun murid dari versi sebelumnya tidak bisa dipakai masuk lagi dan bisa dihapus admin dari tabel Akun.
 - Fungsi pembuatan akun menulis langsung ke tabel `auth` Supabase. Skema `auth` bisa berubah antarversi Supabase; uji satu alur lengkap (daftar, login, ganti sandi) sebelum dipakai sungguhan.

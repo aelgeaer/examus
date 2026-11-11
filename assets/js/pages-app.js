@@ -1,4 +1,4 @@
-import { esc, $, $$, toast, go, fmtDate, fmtShort, parseRoster, homePath, genPassword, suggestUsername, studentLink } from "./util.js";
+import { esc, $, $$, toast, go, fmtDate, fmtShort, parseRoster, homePath, genPassword, suggestUsername, studentLink, passwordIssue, PASSWORD_HINT } from "./util.js";
 import { store, isOpen } from "./store.js";
 import { ICONS, getAssessment, SOCIO_VARIANTS, visibleAssessments } from "./data.js";
 const ASSESSMENTS = visibleAssessments();
@@ -8,6 +8,14 @@ import { socioSummary } from "./socio-data.js";
 const ROLES = ["Guru BK", "Psikolog sekolah", "Wali kelas", "Guru mata pelajaran", "Kepala sekolah", "Lainnya"];
 
 /* ---------------- Kenalan (onboarding) ---------------- */
+// Guru yang mendaftar sendiri menunggu persetujuan admin sebelum boleh membuat kelas dan sesi (dijaga juga di database).
+const isPending = (u) => u.kind === "guru" && u.approved === false;
+const pendingBox = (u) => (isPending(u) ? `<div class="notice" role="status" style="margin-top:1.2rem"><b style="font-weight:600">Akun Anda menunggu persetujuan admin.</b> Setelah disetujui, Anda bisa membuat kelas dan sesi asesmen. Hubungi admin sekolah bila sudah lama menunggu.</div>` : "");
+const pendingView = (user, active) => ({ title: "Menunggu persetujuan", html: `${header(user, active)}<main class="page"><div class="narrow"><h1 class="page-title">Menunggu persetujuan admin</h1>
+  <p class="page-sub">Akun Anda terdaftar, tetapi belum disetujui admin sekolah. Setelah disetujui, Anda bisa membuat kelas dan sesi asesmen.</p>
+  <p style="margin-top:1.2rem"><a class="btn" href="#/dasbor">Ke dasbor</a></p></div></main>` });
+const pwReminder = (u) => (u.mustChange ? `<div class="notice" style="margin-top:1.2rem">Anda masih memakai kata sandi dari admin. Disarankan menggantinya dengan kata sandi sendiri. <a href="#/ganti-sandi">Ganti kata sandi</a></div>` : "");
+
 export function onboarding({ user }) {
   const html = `${header(user)}<main class="page"><div class="narrow" style="max-width:600px">
     <section id="ob1">
@@ -15,7 +23,7 @@ export function onboarding({ user }) {
       <h1 class="page-title" style="margin-top:.3rem">Selamat datang di Examus</h1>
       <p class="page-sub">Isi data singkat ini. Nama dan sekolah Anda tampil di laporan yang dicetak.</p>
       <form id="ob-form" novalidate>
-        <label class="field"><span>Nama lengkap</span><input type="text" name="name" style="text-transform:uppercase" value="${esc(user.name)}" autocomplete="name"><span class="hint">Boleh dengan gelar. Dipakai untuk sapaan dan tanda tangan laporan.</span></label>
+        <label class="field"><span>Nama lengkap</span><input type="text" name="name" value="${esc(user.name)}" autocomplete="name"><span class="hint">Boleh dengan gelar. Dipakai untuk sapaan dan tanda tangan laporan.</span></label>
         <div class="field"><span class="flabel" id="role-l">Peran di sekolah</span><div class="chips" role="radiogroup" aria-labelledby="role-l">${ROLES.map((r) => `<label><input type="radio" name="role" value="${r}"${user.role === r ? " checked" : ""}><span>${r}</span></label>`).join("")}</div></div>
         <p class="muted" style="margin-top:1rem">Sekolah: <b style="font-weight:500">${esc(user.school || "-")}</b></p>
         <p class="err" id="ob-err" role="alert"></p>
@@ -67,6 +75,7 @@ export async function dashboard({ user }) {
   const sessions = await store.listSessions();
   const html = `${header(user, "dasbor")}<main class="page"><div class="narrow" style="max-width:800px">
     <h1 class="page-title">Halo, ${esc(user.name || "Bapak/Ibu")}</h1>
+    ${pendingBox(user)}${pwReminder(user)}
     <h2 class="sec-h">Mulai asesmen</h2>
     <div class="astart" id="astart">${[...ASSESSMENTS.filter((a) => a.ready), ...ASSESSMENTS.filter((a) => !a.ready)].map((a, i) => (a.ready
       ? `<a href="#/mulai/${a.id}"${i >= 3 ? ' class="more"' : ""}>${ICONS[a.id]}<span><b>${esc(a.name)}</b><small>${esc(a.long)}</small></span><span class="go" aria-hidden="true">→</span></a>`
@@ -77,7 +86,7 @@ export async function dashboard({ user }) {
     <div class="rowflex" style="margin-top:1rem">
       <label class="rowflex" style="gap:.5rem"><span class="small muted">Contoh laporan:</span>
         <select id="sample-type" class="btn sm" style="padding-right:.6rem">${ASSESSMENTS.filter((a) => a.ready).map((a) => `<option value="${a.id}">${esc(a.name)}</option>`).join("")}</select></label>
-      <button class="btn sm" id="sample-go">Buat sesi contoh</button>
+      <button class="btn sm" id="sample-go"${isPending(user) ? " disabled" : ""}>Buat sesi contoh</button>
     </div>
   </div></main>`;
   return {
@@ -106,13 +115,15 @@ export async function classes({ user }) {
     <h1 class="page-title">Kelas</h1>
     <p class="page-sub">${user.isAdmin ? "Semua daftar kelas di sekolah Anda. Anda juga bisa memilih guru yang memegang tiap kelas." : "Daftar kelas Anda. Buat sekali, pakai untuk semua asesmen."}</p>
     <div class="list" style="margin-top:1.6rem">${list.map((c) => `<a class="item" href="#/kelas/${c.id}"><span><b>${esc(c.name)}</b><br><span class="meta">${c.members.length} murid${user.isSuper ? ` · ${esc(schoolOf(c.schoolId))}` : ""}</span></span><span aria-hidden="true">›</span></a>`).join("") || `<div class="card"><p>Belum ada kelas. Buat satu dengan menempel nama murid dari Excel atau WhatsApp.</p></div>`}</div>
-    <p style="margin-top:1rem"><a class="btn primary" href="#/kelas/baru">Buat kelas</a></p>
+    ${pendingBox(user)}
+    ${isPending(user) ? "" : `<p style="margin-top:1rem"><a class="btn primary" href="#/kelas/baru">Buat kelas</a></p>`}
   </div></main>`;
   return { title: "Kelas", html };
 }
 
 // Nomor murid dikunci di server: murid lama mempertahankan nomornya, murid baru diberi nomor berikutnya.
 export async function classEdit({ user, params, query }) {
+  if (isPending(user)) return pendingView(user, "kelas");
   const isNew = params.id === "baru";
   const next = query.get("lanjut") || "";
   const existing = isNew ? null : await store.getClass(params.id);
@@ -226,6 +237,7 @@ function settingsConfig(a, root) {
 const ymd = (ms) => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 const DEADLINES = [[1, "1 hari"], [3, "3 hari"], [7, "1 minggu"], [14, "2 minggu"], [30, "30 hari"]];
 export async function start({ user, params, query }) {
+  if (isPending(user)) return pendingView(user, "dasbor");
   const a = getAssessment(params.type);
   if (!a || !a.ready) return { html: `${header(user, "dasbor")}<main class="page"><div class="narrow"><h1 class="page-title">Asesmen belum tersedia</h1><p style="margin-top:1rem"><a class="btn" href="#/dasbor">Ke dasbor</a></p></div></main>` };
   const list = await store.listClasses();
@@ -384,7 +396,7 @@ export async function session({ user, params }) {
 /* ---------------- Ganti kata sandi ---------------- */
 const pwForm = (id, label) => `<form id="${id}" novalidate>
   <label class="field"><span>Kata sandi saat ini</span><input type="password" name="old" autocomplete="current-password" required></label>
-  <label class="field"><span>Kata sandi baru</span><input type="password" name="pw" autocomplete="new-password" required><span class="hint">Minimal 6 karakter. Pilih yang hanya Anda yang tahu.</span></label>
+  <label class="field"><span>Kata sandi baru</span><input type="password" name="pw" autocomplete="new-password" required><span class="hint">${PASSWORD_HINT} Pilih yang hanya Anda yang tahu.</span></label>
   <label class="field"><span>Ulangi kata sandi baru</span><input type="password" name="pw2" autocomplete="new-password" required></label>
   <p class="err" role="alert"></p>
   <button class="btn primary">${label}</button>
@@ -394,7 +406,7 @@ function bindPwForm(form, onDone) {
   const err = form.querySelector(".err"), btn = form.querySelector("button");
   form.addEventListener("submit", async (e) => {
     e.preventDefault(); err.textContent = "";
-    if (form.pw.value.length < 6) { err.textContent = "Kata sandi baru minimal 6 karakter."; return; }
+    const bad = passwordIssue(form.pw.value); if (bad) { err.textContent = bad; return; }
     if (form.pw.value !== form.pw2.value) { err.textContent = "Pengulangan kata sandi tidak sama."; return; }
     btn.disabled = true;
     try { await store.changePassword(form.old.value, form.pw.value); toast("Kata sandi diganti"); form.reset(); onDone(); }
@@ -408,9 +420,9 @@ export function changePassword({ user }) {
     title: "Ganti kata sandi",
     html: `${header(user, "akun")}<main class="page"><div class="narrow" style="max-width:460px">
       <h1 class="page-title">Ganti kata sandi</h1>
-      <p class="page-sub">${user.mustChange ? "Kata sandi dari admin hanya untuk masuk pertama kali. Buat kata sandi baru sebelum melanjutkan." : "Kata sandi baru berlaku mulai sekarang."}</p>
+      <p class="page-sub">${user.mustChange ? "Kata sandi dari admin sebaiknya diganti dengan kata sandi buatan Anda sendiri. Anda juga boleh melewatinya dulu dan menggantinya nanti lewat Pengaturan akun." : "Kata sandi baru berlaku mulai sekarang."}</p>
       ${pwForm("pw", user.mustChange ? "Simpan dan lanjut" : "Ganti kata sandi")}
-      <p style="margin-top:1.2rem"><button class="linkbtn" id="pw-out">Keluar</button></p>
+      <p style="margin-top:1.2rem">${user.mustChange ? `<a class="btn" id="pw-skip" href="#${homePath(user)}">Lewati dulu</a> ` : ""}<button class="linkbtn" id="pw-out">Keluar</button></p>
     </div></main>`,
     mount(root) {
       bindPwForm($("#pw", root), () => go(homePath(user)));
@@ -441,6 +453,7 @@ export async function admin({ user }) {
   const [d, schools] = await Promise.all([store.admin(), store.schools()]);
   let users = await store.adminUsers();
   const sup = user.isSuper;
+  const pendingTeachers = users.filter((u) => u.kind === "guru" && u.approved === false).length;
   const schoolName = (id) => schools.find((s) => s.id === id)?.name || "-";
   const schoolOpts = (withAll) => (withAll ? `<option value="">Semua sekolah (admin pusat)</option>` : "") + schools.map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join("");
 
@@ -454,6 +467,7 @@ export async function admin({ user }) {
       <div class="card"><div class="k">Jawaban murid</div><div class="v">${d.totals.responses}</div></div>
     </div>
 
+    ${pendingTeachers ? `<div class="notice" role="status" style="margin-top:1.4rem"><b style="font-weight:600">${pendingTeachers} guru menunggu persetujuan.</b> Cari yang bertanda "Menunggu persetujuan" di tabel Akun, lalu tekan Setujui.</div>` : ""}
     <h2 class="sec-h">Akun</h2>
     <details class="card" id="add" style="margin-bottom:1rem"><summary style="cursor:pointer;font-weight:500">Tambah satu akun</summary>
       <form id="add-form" novalidate style="margin-top:.8rem">
@@ -461,7 +475,7 @@ export async function admin({ user }) {
           <label><input type="radio" name="kind" value="guru" checked><span>Guru</span></label>
           <label><input type="radio" name="kind" value="admin"><span>Admin</span></label></div></div>
         ${sup ? `<label class="field" id="w-school"><span>Sekolah</span><select name="fschool" class="btn"></select></label>` : ""}
-        <label class="field"><span>Nama lengkap</span><input type="text" name="fname" style="text-transform:uppercase" autocomplete="off"></label>
+        <label class="field"><span>Nama lengkap</span><input type="text" name="fname" autocomplete="off"></label>
         <label class="field" id="w-title"><span>Peran di sekolah (opsional)</span><input type="text" name="ftitle" placeholder="Misalnya: Guru BK" autocomplete="off"></label>
         <label class="field"><span>Nama akun</span><input type="text" name="fuser" autocomplete="off" autocapitalize="none" spellcheck="false"><span class="hint">Huruf kecil, angka, titik, garis bawah, atau strip. Tidak boleh sama dengan akun lain.</span></label>
         <label class="field"><span>Kata sandi awal</span><div class="rowflex" style="gap:.5rem"><input type="text" name="fpass" autocomplete="off" spellcheck="false" style="flex:1"><button type="button" class="btn sm" id="f-rand">Acak</button></div><span class="hint">Pemilik akun diminta menggantinya saat masuk pertama.</span></label>
@@ -501,7 +515,8 @@ export async function admin({ user }) {
         const pw = u.password
           ? `<code data-pw>••••••••</code> <button class="linkbtn" data-act="show">Lihat</button> <button class="linkbtn" data-act="copy">Salin</button>`
           : `<span class="muted small">Sudah diganti pemilik</span>`;
-        return `<tr data-id="${u.id}"><td>${esc(u.username)}</td><td>${esc(u.name || "-")}${detail ? `<br><span class="meta">${esc(detail)}</span>` : ""}</td><td>${KIND[u.kind]}${u.kind === "admin" && !u.schoolId ? " pusat" : ""}</td><td>${esc(u.school || "Semua")}</td><td>${pw}</td><td style="white-space:nowrap"><button class="btn sm" data-act="reset">Atur ulang</button> <button class="btn sm danger" data-act="del">Hapus</button></td></tr>`;
+        const wait = u.kind === "guru" && u.approved === false;
+        return `<tr data-id="${u.id}"><td>${esc(u.username)}</td><td>${esc(u.name || "-")}${wait ? ` <span class="badge closed">Menunggu persetujuan</span>` : ""}${detail ? `<br><span class="meta">${esc(detail)}</span>` : ""}</td><td>${KIND[u.kind]}${u.kind === "admin" && !u.schoolId ? " pusat" : ""}</td><td>${esc(u.school || "Semua")}</td><td>${pw}</td><td style="white-space:nowrap">${wait ? `<button class="btn sm primary" data-act="approve">Setujui</button> ` : ""}<button class="btn sm" data-act="reset">Atur ulang</button> <button class="btn sm danger" data-act="del">Hapus</button></td></tr>`;
       };
       const drawTable = () => {
         const q = $("#u-q", root).value.trim().toLowerCase(), sc = $("#u-school", root)?.value || "", kd = $("#u-kind", root).value;
@@ -522,6 +537,8 @@ export async function admin({ user }) {
           } else if (b.dataset.act === "copy") {
             const text = `Nama akun: ${u.username}\nKata sandi: ${u.password}`;
             try { await navigator.clipboard.writeText(text); toast("Nama akun dan kata sandi disalin"); } catch { prompt("Salin teks ini:", text); }
+          } else if (b.dataset.act === "approve") {
+            await store.adminApprove(u.id, true); toast(`${u.name || u.username} disetujui`); await refresh();
           } else if (b.dataset.act === "reset") {
             const pw = prompt(`Kata sandi baru untuk ${u.name || u.username} (minimal 6 karakter):`, genPassword());
             if (!pw) return;

@@ -86,7 +86,8 @@ export function socioFlow(pub, top) {
               <div class="rchips">${[...opts, OTHER_REASON].map((t) => `<button type="button" class="rchip" data-t="${esc(t)}" aria-pressed="${t === OTHER_REASON ? !!other || mine.includes(OTHER_REASON) : mine.includes(t)}">${esc(t)}</button>`).join("")}</div>
               <input type="text" class="rother${other || mine.includes(OTHER_REASON) ? "" : " hide"}" maxlength="80" placeholder="Tulis alasanmu sendiri" value="${esc(other ? other.slice(OTHER_REASON.length + 2) : "")}">
             </div>`; }).join("")}
-            <button class="btn primary block" id="gb-next" style="margin-top:1.4rem">${qi === qs.length - 1 ? "Kirim jawaban" : "Lanjut"}</button>
+            <p class="muted small" id="why-hint" style="text-align:center;margin-top:1rem">Pilih minimal satu alasan untuk setiap teman, lalu lanjut.</p>
+            <button class="btn primary block" id="gb-next" style="margin-top:.5rem">${qi === qs.length - 1 ? "Kirim jawaban" : "Lanjut"}</button>
             <button class="gb-ghost" id="gb-back">Kembali</button>`;
           const save = (box) => {
             const no = Number(box.dataset.no);
@@ -95,15 +96,20 @@ export function socioFlow(pub, top) {
             r[no] = sel.filter((t) => t !== OTHER_REASON);
             if (sel.includes(OTHER_REASON)) r[no].push(txt ? `${OTHER_REASON}: ${txt}` : OTHER_REASON);
           };
+          // Tiap teman yang dipilih harus punya minimal satu alasan; "Lainnya" dihitung bila ada tulisannya.
+          const complete = () => chosen.every((no) => (r[no] || []).some((t) => t !== OTHER_REASON));
+          const check = () => { const ok = complete(); $("#gb-next", main).disabled = !ok; $("#why-hint", main).classList.toggle("hide", ok); };
           main.querySelectorAll(".why").forEach((box) => {
+            save(box);
             box.querySelectorAll(".rchip").forEach((b) => (b.onclick = () => {
               const on = b.getAttribute("aria-pressed") !== "true"; b.setAttribute("aria-pressed", String(on));
               if (b.dataset.t === OTHER_REASON) { const inp = box.querySelector(".rother"); inp.classList.toggle("hide", !on); if (on) inp.focus(); }
-              save(box);
+              save(box); check();
             }));
-            box.querySelector(".rother").oninput = () => save(box);
+            box.querySelector(".rother").oninput = () => { save(box); check(); };
           });
-          $("#gb-next", main).onclick = () => { main.querySelectorAll(".why").forEach(save); next(); };
+          check();
+          $("#gb-next", main).onclick = () => { main.querySelectorAll(".why").forEach(save); if (!complete()) { check(); return; } next(); };
           $("#gb-back", main).onclick = () => { main.querySelectorAll(".why").forEach(save); goTo("pick"); };
         } else {
           const more = pub.roster.some((m) => !filled.has(m.no));
