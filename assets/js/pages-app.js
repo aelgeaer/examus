@@ -208,6 +208,7 @@ function settingsHtml(a) {
     <label class="opt"><input type="radio" name="phq" value="phq8"><span class="t">Tanpa nomor 9 (PHQ-8)</span><span class="d">Batas skor sama. Pilih ini bila belum ada yang bisa menindaklanjuti di hari yang sama; tetap tanyakan keselamatan saat berbicara dengan murid yang skornya tinggi.</span></label>
     ${consent()}${note}</div>`;
   if (a.settings === "jenjang") return `<div id="st-settings">
+    <label class="opt"><input type="radio" name="jenjang" value="sd"><span class="t">SD/MI, kelas I-VI</span><span class="d">Bahasa sederhana. Untuk kelas rendah (I-III), bacakan soal dan dampingi murid mengisi.</span></label>
     <label class="opt"><input type="radio" name="jenjang" value="smp"><span class="t">SMP/MTs, kelas VII-IX</span></label>
     <label class="opt"><input type="radio" name="jenjang" value="sma"><span class="t">SMA/SMK/MA, kelas X-XII</span></label></div>`;
   return "";
@@ -218,7 +219,7 @@ function settingsConfig(a, root) {
   if (a.id === "aman") c.n = 40;
   if (a.settings === "consent" || a.settings === "phq") c.consentAt = new Date().toISOString();
   if (a.settings === "phq") c.variant = $('input[name="phq"]:checked', root).value;
-  if (a.settings === "jenjang") { c.jenjang = $('input[name="jenjang"]:checked', root).value; c.n = 60; }
+  if (a.settings === "jenjang") { c.jenjang = $('input[name="jenjang"]:checked', root).value; c.n = 60; c.ver = 2; }
   return c;
 }
 

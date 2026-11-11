@@ -266,7 +266,7 @@ export function akpdReport(s, res) {
   const klasikal = sorted.filter((x) => x.p >= 50), kelompok = sorted.filter((x) => x.p >= 25 && x.p < 50);
   const first = [...done].sort((a, b) => b.p.total - a.p.total).filter((r) => r.p.total / r.p.max >= 0.5).slice(0, 10);
   const body = `
-    <p class="muted" style="margin-top:1rem">Jenjang: ${cfg.jenjang === "sma" ? "SMA/MA" : "SMP/MTs"}. Persentase = murid yang memilih "butuh bantuan" atau "sangat butuh bantuan".</p>
+    <p class="muted" style="margin-top:1rem">Jenjang: ${{ sd: "SD/MI", sma: "SMA/SMK/MA" }[cfg.jenjang] || "SMP/MTs"}. Persentase = murid yang memilih "butuh bantuan" atau "sangat butuh bantuan".</p>
     <h2 class="sec-h">Kebutuhan kelas per bidang</h2>
     <div class="card">${bars(bid)}</div>
     <h2 class="sec-h">Topik bimbingan klasikal</h2>

@@ -8,6 +8,7 @@ import { radar } from "./charts.js";
 import { gayaProfile, donut, VAK_COLOR } from "./gaya.js";
 
 import { talk } from "./help.js";
+import { AKPD_AREAS, AKPD_SD, AKPD_SMA, AKPD_KARIER } from "./akpd-data.js";
 import { PR_ITEMS as PR40, amanResult } from "./aman.js";
 const TALK = talk();
 const HELP = `<div class="gb-tips"><h2>Kalau butuh teman bicara</h2><ul><li>Ceritakan kepada guru BK, wali kelas, atau orang dewasa yang kamu percaya.</li><li>Kalau kamu atau temanmu dalam bahaya, segera minta tolong orang dewasa terdekat atau telepon 112.</li></ul></div>`;
@@ -264,13 +265,23 @@ const AKPD_RAW = [
   ak("pribadi", "Menghargai diri sendiri tanpa selalu membandingkan dengan orang lain"), ak("sosial", "Menjaga etika dan keamanan saat memakai media sosial"), ak("belajar", "Memakai internet dan kecerdasan buatan (AI) dengan jujur untuk belajar"), ak("karier", "Mengenal sikap kerja yang dihargai di dunia kerja"),
   ak("pribadi", "Memahami nilai dan prinsip yang kupegang", "Merumuskan nilai dan prinsip hidup yang kupegang"), ak("sosial", "Membicarakan masalah dengan orang tua atau keluarga"), ak("belajar", "Belajar kelompok bersama teman dengan efektif"), ak("karier", "Membicarakan rencana masa depan dengan orang tua"),
 ];
-export const akpdItems = (cfg) => AKPD_RAW.slice(0, cfg.n || 40).map((it) => ({ k: it.k, text: cfg.jenjang === "sma" ? it.sma : it.smp }));
+// Sesi baru (cfg.ver >= 2) memakai daftar butir per jenjang SD, SMP, dan SMA. Sesi lama memakai versi sebelumnya
+// (40 atau 60 butir dengan varian SMP dan SMA) supaya teks di laporan lama tidak berubah.
+export const akpdItems = (cfg) => {
+  const n = cfg.n || 40;
+  if ((cfg.ver || 1) >= 2) {
+    const list = cfg.jenjang === "sd" ? AKPD_SD : cfg.jenjang === "sma" ? AKPD_SMA : AKPD_RAW.map((x) => x.smp);
+    return list.slice(0, n).map((text, i) => ({ k: AKPD_AREAS[i % 4], text }));
+  }
+  return AKPD_RAW.slice(0, n).map((it) => ({ k: it.k, text: cfg.jenjang === "sma" ? it.sma : it.smp }));
+};
 export const AKPD_DESC = {
   pribadi: "dirimu sendiri, seperti mengenal diri, mengelola perasaan, dan percaya diri",
   sosial: "hubungan dengan orang lain, seperti pertemanan, bekerja sama, dan menghadapi konflik",
   belajar: "belajar dan sekolah, seperti cara belajar, konsentrasi, dan menghadapi ulangan",
   karier: "masa depanmu, seperti minat, pilihan jurusan, kuliah, kerja, dan beasiswa",
 };
+export const akpdDesc = (cfg, k) => (k === "karier" ? AKPD_KARIER[cfg.jenjang] || AKPD_DESC.karier : AKPD_DESC[k]);
 export const AKPD_OPTS = [{ v: 3, t: "Sangat butuh bantuan" }, { v: 2, t: "Butuh bantuan" }, { v: 1, t: "Sedikit butuh bantuan" }, { v: 0, t: "Tidak butuh bantuan" }];
 export function akpdProfile(a, cfg) {
   const items = akpdItems(cfg), s = {}, n = {};
@@ -435,7 +446,7 @@ export const INSTR = {
     result(a, cfg, name) {
       const p = akpdProfile(a, cfg), items = akpdItems(cfg), top = p.order[0], any = p.pct[top] > 0;
       const wants = items.map((it, i) => ({ text: it.text, v: Number(a?.[i]) || 0, i })).filter((x) => x.v >= 1).sort((x, y) => y.v - x.v || x.i - y.i).slice(0, 5);
-      const lead = any ? `Kamu paling ingin dibantu di bidang <b style="font-weight:600">${AKPD_BIDANG[top].toLowerCase()}</b>, yaitu ${AKPD_DESC[top]}.` : "Belakangan ini kamu belum merasa butuh banyak bantuan di bidang mana pun. Kalau nanti ada yang ingin kamu tanyakan, gurumu siap mendengar.";
+      const lead = any ? `Kamu paling ingin dibantu di bidang <b style="font-weight:600">${AKPD_BIDANG[top].toLowerCase()}</b>, yaitu ${akpdDesc(cfg, top)}.` : "Belakangan ini kamu belum merasa butuh banyak bantuan di bidang mana pun. Kalau nanti ada yang ingin kamu tanyakan, gurumu siap mendengar.";
       const minTop = p.order[p.order.length - 1];
       return `<p class="gb-eyebrow">Hasilmu</p><h1>Terima kasih sudah jujur, ${esc(name)}.</h1>
         <p class="lead" style="margin-top:.6rem">${lead}</p>

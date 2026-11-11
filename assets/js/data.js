@@ -71,7 +71,7 @@ export const ASSESSMENTS = [
       A("Contoh kebutuhan", "Beberapa yang akan dinilai murid:", { ex: ["Mengenali kelebihan dan kekurangan diri", "Berkomunikasi dengan baik kepada orang lain", "Menemukan cara belajar yang paling cocok", "Mengenali minat dan bakat diri"] }),
       A("Yang dilihat murid", "Bidang yang paling ingin ia bantu, dan ke mana ia bisa bercerita."),
       A("Yang Anda dapat", "Kebutuhan kelas per bidang, topik bimbingan klasikal dan kelompok, rekap semua butir untuk program BK, dan murid yang perlu diajak bicara lebih dulu."),
-      A("Dasarnya", "15 kebutuhan di tiap bidang layanan BK (pribadi, sosial, belajar, karier), dengan butir SMP dan SMA sendiri.")] },
+      A("Dasarnya", "15 kebutuhan di tiap bidang layanan BK (pribadi, sosial, belajar, karier), dengan butir SD, SMP, dan SMA sendiri.")] },
   { id: "aman", name: "Deteksi Perundungan", ready: true, tone: "c-sky", who: "Guru BK dan kepala sekolah", settings: "consent",
     short: "Siapa terindikasi mengalami, melakukan, atau menyaksikan perundungan, dan seberapa aman sekolah terasa.",
     long: "Siapa terindikasi mengalami, melakukan, atau menyaksikan perundungan, dan seberapa aman sekolah terasa bagi murid.",
