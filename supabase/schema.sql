@@ -63,6 +63,8 @@ create table if not exists public.credentials (
   user_id uuid primary key references public.profiles on delete cascade,
   password text not null
 );
+-- Salinan sandi sementara (buatan admin) hanya bisa dilihat admin selama 14 hari, lalu dihapus.
+alter table public.credentials add column if not exists created_at timestamptz not null default now();
 
 -- Guru memegang kelas yang ditugaskan admin. Satu guru boleh banyak kelas, satu kelas boleh banyak guru.
 create table if not exists public.class_teachers (
@@ -343,9 +345,10 @@ end $$;
 drop function if exists public.admin_create_students(uuid);   -- murid tidak lagi memakai akun
 
 create or replace function public.admin_users() returns json
-language plpgsql stable security definer set search_path = public as $$
+language plpgsql volatile security definer set search_path = public as $$
 declare a public.profiles := public._need_admin();
 begin
+  delete from public.credentials where created_at < now() - interval '14 days';
   return (select coalesce(json_agg(x order by x.kind, x.name), '[]'::json) from (
     select p.id, p.username, p.name, p.kind, p.title, p.school_id as "schoolId", s.name as school,
            p.class_id as "classId", c.name as "className", p.member_no as "memberNo",
@@ -377,7 +380,7 @@ begin
   if length(coalesce(p_password, '')) < 6 then raise exception 'Kata sandi minimal 6 karakter.'; end if;
   update auth.users set encrypted_password = crypt(p_password, gen_salt('bf')), updated_at = now() where id = p_user;
   insert into public.credentials (user_id, password) values (p_user, p_password)
-    on conflict (user_id) do update set password = excluded.password;
+    on conflict (user_id) do update set password = excluded.password, created_at = now();
   update public.profiles set must_change = true where id = p_user;
 end $$;
 
@@ -578,6 +581,9 @@ begin
   if p_school is null or not exists (select 1 from public.schools where id = p_school) then raise exception 'Pilih sekolah Anda.'; end if;
   if u !~ '^[a-z0-9._-]{3,30}$' then raise exception 'Nama akun 3 sampai 30 karakter: huruf kecil, angka, titik, garis bawah, atau strip.'; end if;
   perform public._check_password(p_password);
+  if (select count(*) from public.profiles where kind = 'guru' and approved = false) >= 30 then
+    raise exception 'Terlalu banyak pendaftaran yang menunggu persetujuan. Hubungi admin sekolah agar mereka disetujui dulu.';
+  end if;
   begin
     new_id := public._create_account(u, p_password, trim(p_name), 'guru', p_school, null, null, null, false);
     update public.profiles set approved = false where id = new_id;   -- menunggu persetujuan admin
@@ -604,6 +610,54 @@ language sql stable security definer set search_path = public as $$
     'open', (not s.closed and now() < s.closes_at))
   from public.sessions s where s.code = p_code $$;
 
+-- Memastikan jawaban murid berbentuk wajar. Tanpa ini, siapa pun yang memegang link bisa mengirim data aneh
+-- (misalnya teks di tempat yang seharusnya daftar) dan membuat laporan guru gagal tampil.
+--   sosiometri : tiap pertanyaan berupa daftar nomor murid (tidak berulang, ada di kelas, bukan dirinya, paling banyak maxPick);
+--                "reasons" berupa {pertanyaan: {nomor: [teks pendek]}}.
+--   lainnya    : kunci pendek, nilainya angka, ya/tidak, atau teks pendek.
+create or replace function public._check_answers(s public.sessions, p_no int, a jsonb) returns void
+language plpgsql immutable set search_path = public as $$
+declare k text; v jsonb; qid text; nos int[]; mx int := 3; x jsonb; seen int[]; rk text; rv jsonb; t jsonb;
+begin
+  if a is null or jsonb_typeof(a) <> 'object' then raise exception 'Jawaban tidak valid.'; end if;
+  if (select count(*) from jsonb_object_keys(a)) > 200 then raise exception 'Jawaban tidak valid.'; end if;
+  if s.type = 'sosiometri' then
+    select coalesce(array_agg((m->>'no')::int), '{}') into nos from jsonb_array_elements(s.roster) m;
+    if coalesce(s.config->>'maxPick', '') ~ '^[0-9]{1,2}$' then mx := least((s.config->>'maxPick')::int, 10); end if;
+    for k, v in select * from jsonb_each(a) loop
+      if k = 'reasons' then
+        if jsonb_typeof(v) <> 'object' then raise exception 'Jawaban tidak valid.'; end if;
+        for rk, rv in select * from jsonb_each(v) loop
+          if jsonb_typeof(rv) <> 'object' then raise exception 'Jawaban tidak valid.'; end if;
+          for qid, t in select * from jsonb_each(rv) loop
+            if qid !~ '^[0-9]{1,4}$' or jsonb_typeof(t) <> 'array' or jsonb_array_length(t) > 10 then raise exception 'Jawaban tidak valid.'; end if;
+            for x in select * from jsonb_array_elements(t) loop
+              if jsonb_typeof(x) <> 'string' or length(x #>> '{}') > 120 then raise exception 'Jawaban tidak valid.'; end if;
+            end loop;
+          end loop;
+        end loop;
+      else
+        if not exists (select 1 from jsonb_array_elements(coalesce(s.config->'questions', '[]'::jsonb)) q where q->>'id' = k) then
+          raise exception 'Jawaban tidak valid.';
+        end if;
+        if jsonb_typeof(v) <> 'array' or jsonb_array_length(v) > mx then raise exception 'Jawaban tidak valid.'; end if;
+        seen := '{}';
+        for x in select * from jsonb_array_elements(v) loop
+          if jsonb_typeof(x) <> 'number' or (x #>> '{}') !~ '^[0-9]{1,5}$' then raise exception 'Jawaban tidak valid.'; end if;
+          if not ((x #>> '{}')::int = any(nos)) or (x #>> '{}')::int = p_no or (x #>> '{}')::int = any(seen) then raise exception 'Jawaban tidak valid.'; end if;
+          seen := seen || (x #>> '{}')::int;
+        end loop;
+      end if;
+    end loop;
+  else
+    for k, v in select * from jsonb_each(a) loop
+      if k !~ '^[A-Za-z0-9_]{1,24}$' then raise exception 'Jawaban tidak valid.'; end if;
+      if jsonb_typeof(v) not in ('number', 'boolean', 'string') then raise exception 'Jawaban tidak valid.'; end if;
+      if jsonb_typeof(v) = 'string' and length(v #>> '{}') > 40 then raise exception 'Jawaban tidak valid.'; end if;
+    end loop;
+  end if;
+end $$;
+
 -- Murid mengirim jawaban tanpa akun. Satu nama hanya bisa mengisi satu kali.
 create or replace function public.submit_response(p_code text, p_no int, p_answers jsonb) returns void
 language plpgsql security definer set search_path = public as $$
@@ -616,6 +670,7 @@ begin
     raise exception 'Nama tidak ada di daftar kelas.';
   end if;
   if p_answers is null or pg_column_size(p_answers) > 20000 then raise exception 'Jawaban tidak valid.'; end if;
+  perform public._check_answers(s, p_no, p_answers);
   begin
     insert into public.responses (session_id, member_no, answers) values (s.id, p_no, p_answers);
   exception when unique_violation then

@@ -16,7 +16,8 @@ const sampleAnswers = (type) => (type === "sosiometri" ? sampleSocioResponses(SA
 export const configured = Boolean(CONFIG.SUPABASE_URL && CONFIG.SUPABASE_ANON_KEY);
 
 async function makeSupabase() {
-  const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
+  // Pustaka Supabase disimpan di repo (versi tetap) supaya tidak bergantung pada CDN pihak ketiga saat dijalankan.
+  const { createClient } = await import("../vendor/supabase-js-2.119.0.mjs");
   const sb = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
   const MSG = [
     [/Invalid login credentials/i, "Nama akun atau kata sandi tidak cocok."],

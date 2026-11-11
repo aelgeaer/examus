@@ -56,7 +56,8 @@ export function socioStats(s, res) {
   const filled = new Set(res.map((r) => r.no));
   const qs = s.config?.questions || [];
   const per = qs.map((q, qi) => {
-    const picks = {}; res.forEach((r) => (picks[r.no] = r.answers?.[q.id] || []));
+    // Jawaban dibaca dengan hati-hati: data yang bentuknya tidak wajar dianggap kosong, bukan merusak laporan.
+    const picks = {}; res.forEach((r) => (picks[r.no] = Array.isArray(r.answers?.[q.id]) ? r.answers[q.id].filter((x) => Number.isInteger(x)) : []));
     const an = analyze(s.roster, picks, filled);
     an.rows.forEach((r) => { r.M = filled.size - (filled.has(r.no) ? 1 : 0); r.idx = r.M ? r.count / r.M : 0; });
     const z = zScores(an.rows.map((r) => r.score));
@@ -64,7 +65,9 @@ export function socioStats(s, res) {
     const totalPicks = an.rows.reduce((t, r) => t + r.picks.length, 0);
     const counts = new Map((SOCIO_REASONS[areaOf(q)] || []).map((t) => [t, 0]));
     let other = 0; const otherText = [];
-    res.forEach((r) => Object.values(r.answers?.reasons?.[q.id] || {}).forEach((list) => (list || []).forEach((t) => {
+    const objOf = (x) => (x && typeof x === "object" && !Array.isArray(x) ? x : {});
+    res.forEach((r) => Object.values(objOf(objOf(r.answers?.reasons)[q.id])).forEach((list) => (Array.isArray(list) ? list : []).forEach((t) => {
+      if (typeof t !== "string") return;
       if (String(t).startsWith(OTHER_REASON)) { other++; const x = String(t).slice(OTHER_REASON.length + 2).trim(); if (x) otherText.push(x); }
       else counts.set(t, (counts.get(t) || 0) + 1);
     })));

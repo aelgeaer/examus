@@ -49,7 +49,9 @@ export function download(filename, content, mime = "text/plain") {
 
 export function toCSV(rows) {
   const cell = (v) => {
-    const s = String(v ?? "");
+    let s = String(v ?? "");
+    // Teks yang diawali = + @ bisa dibaca Excel sebagai rumus; diberi petik di depan supaya tampil sebagai teks.
+    if (typeof v === "string" && /^[=+@\t\r]|^-[A-Za-z(]/.test(s)) s = "'" + s;
     return /[",;\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
   };
   return "﻿" + rows.map((r) => r.map(cell).join(";")).join("\r\n");

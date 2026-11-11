@@ -70,6 +70,9 @@ Kunci `anon public` aman diletakkan di kode publik. Yang menjaga data adalah Row
 - **Link murid** memuat kode acak 10 karakter. Siapa pun yang memegang link bisa melihat nama kelas dan daftar nama murid, dan bisa mengisi atas nama murid yang belum mengisi. Bagikan hanya ke grup kelas, dan tutup sesi bila sudah selesai.
 - **Nomor murid dikunci di server.** Murid lama mempertahankan nomornya saat daftar kelas diubah, murid baru mendapat nomor berikutnya, dan nomor lama tidak dipakai ulang, supaya jawaban di sesi lama tidak tertukar.
 - **Sesi dibuat di server** (`create_session`): nama kelas dan daftar murid diambil dari database, hanya untuk kelas yang boleh diakses pembuatnya.
+- **Validasi jawaban murid di server** (`_check_answers`): jawaban sosiometri harus daftar nomor murid yang sah, jawaban lain hanya angka, ya/tidak, atau teks pendek. Tanpa ini, satu kiriman aneh bisa merusak laporan guru.
+- **Header keamanan** ada di `vercel.json` (CSP, anti-iframe, nosniff, HSTS). Pustaka Supabase disimpan di `assets/vendor/` dengan versi tetap, jadi aplikasi tidak memuat skrip dari CDN pihak ketiga. Bila mengganti alamat proyek Supabase, ubah juga `connect-src` di `vercel.json`.
+- **Salinan sandi sementara** buatan admin dihapus otomatis setelah 14 hari.
 - **Persetujuan guru.** Guru yang mendaftar sendiri belum bisa membuat kelas atau sesi sampai disetujui admin (tombol Setujui di tabel Akun, dasbor admin). Akun buatan admin langsung disetujui, begitu juga akun yang sudah ada sebelum fitur ini. Dijaga di database, bukan hanya di tampilan.
 - **Aturan kata sandi** (daftar sendiri dan ganti sandi): minimal 6 karakter, ada huruf dan angka, tanpa tiga angka berurutan seperti 123 atau 987.
 - **Admin pusat tidak membuat sesi** karena tidak punya sekolah. Gunakan akun admin sekolah atau guru.
