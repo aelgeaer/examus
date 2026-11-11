@@ -208,7 +208,7 @@ function settingsHtml(a) {
     <label class="opt"><input type="radio" name="phq" value="phq8"><span class="t">Tanpa nomor 9 (PHQ-8)</span><span class="d">Batas skor sama. Pilih ini bila belum ada yang bisa menindaklanjuti di hari yang sama; tetap tanyakan keselamatan saat berbicara dengan murid yang skornya tinggi.</span></label>
     ${consent()}${note}</div>`;
   if (a.settings === "jenjang") return `<div id="st-settings">
-    <label class="opt"><input type="radio" name="jenjang" value="sd"><span class="t">SD/MI, kelas I-VI</span><span class="d">Bahasa sederhana. Untuk kelas rendah (I-III), bacakan soal dan dampingi murid mengisi.</span></label>
+    <label class="opt"><input type="radio" name="jenjang" value="sd"><span class="t">SD/MI, kelas IV-VI</span><span class="d">Bahasa sederhana. Kelas I-III belum disarankan karena 60 butir sulit diisi sendiri. Bila tetap dipakai, bacakan soal dan dampingi murid.</span></label>
     <label class="opt"><input type="radio" name="jenjang" value="smp"><span class="t">SMP/MTs, kelas VII-IX</span></label>
     <label class="opt"><input type="radio" name="jenjang" value="sma"><span class="t">SMA/SMK/MA, kelas X-XII</span></label></div>`;
   return "";
@@ -237,6 +237,7 @@ export async function start({ user, params, query }) {
     <a class="back" href="#/dasbor">← Dasbor</a>
     <h1 class="page-title">Mulai ${esc(a.title || a.name.toLowerCase())}</h1>
     <p class="page-sub">${esc(a.long)}</p>
+    ${a.grade ? `<div class="notice grade ${a.grade.level}"><b style="font-weight:600">Jenjang yang disarankan.</b> ${esc(a.grade.text)}</div>` : ""}
     <h2 class="sec-h">Untuk kelas mana?</h2>
     ${list.length ? `<div class="chips" role="radiogroup" aria-label="Kelas">${list.map((c) => `<label><input type="radio" name="kelas" value="${c.id}"${c.id === pre ? " checked" : ""}><span>${esc(c.name)} (${c.members.length})</span></label>`).join("")}</div>
       <p style="margin-top:.7rem"><a class="btn sm" href="#/kelas/baru?lanjut=/mulai/${a.id}">+ Tambah kelas lain</a></p>`
