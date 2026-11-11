@@ -410,7 +410,7 @@ table.tbl { border-collapse: collapse; width: 100%; font-size: .93rem; }
 .gb-stack { display: flex; gap: 4px; height: 26px; margin-top: 1.4rem; border-radius: 999px; overflow: hidden; background: var(--sky); padding: 4px; }
 .gb-stack i { display: block; height: 100%; border-radius: 999px; }
 .gb-legend { display: flex; flex-wrap: wrap; gap: .4rem 1.2rem; margin-top: .8rem; font-size: 1rem; }
-.gb-legend .d { display: inline-block; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--ink); vertical-align: -2px; margin-right: .35rem; }
+.gb-legend .dot { display: inline-block; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--ink); vertical-align: -2px; margin-right: .35rem; }
 .gb-tips { background: #fff; border-radius: 24px; padding: 1.3rem 1.4rem; margin-top: 1.4rem; }
 .gb-tips h2 { font-size: 1.25rem; }
 .gb-tips ul { padding-left: 1.2rem; margin-top: .6rem; }
@@ -440,7 +440,7 @@ details.card > summary { cursor: pointer; font-weight: 500; }
 .gsum h2 { font-size: clamp(1.4rem, 3vw, 1.8rem); line-height: 1.2; }
 .glegend { display: grid; grid-template-columns: auto auto; justify-content: start; gap: .3rem 3rem; margin-top: .8rem; }
 .glegend dd { margin: 0; font-weight: 600; }
-.d { display: inline-block; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--ink); vertical-align: -2px; margin-right: .4rem; }
+.dot { display: inline-block; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--ink); vertical-align: -2px; margin-right: .4rem; }
 .strat { list-style: none; padding: 0; display: grid; gap: .5rem; }
 .strat li { display: flex; gap: .8rem; align-items: flex-start; background: #fff; border-radius: 16px; padding: .85rem 1rem; }
 .strat li.hi { background: var(--sky); }
@@ -452,3 +452,52 @@ details.card > summary { cursor: pointer; font-weight: 500; }
 .caveat { background: #fde2e2; border-radius: 16px; padding: 1rem 1.2rem; margin-top: 2rem; line-height: 1.55; }
 @media (max-width: 640px) { .gsum { grid-template-columns: 1fr; } .gsum .donut { max-width: 220px; } .ggroups { grid-template-columns: 1fr; } }
 @media print { .gsum, .strat li, .caveat, .notice { break-inside: avoid; } }
+
+/* Dasbor: daftar asesmen ringkas */
+.astart:not(.open) .more { display: none; }
+.astart small { font-size: .9rem; }
+.astart .go { font-size: 1.2rem; }
+
+/* Mulai sosiometri: pilihan angket */
+.opt .qlink { display: none; margin: .7rem 0 0 1.75rem; font-size: .92rem; font-weight: 500; }
+.opt:has(input:checked) .qlink { display: inline-block; }
+a.opt.addq { text-decoration: none; margin-top: .6rem; }
+a.opt.addq .d { margin-left: 0; }
+
+/* Angket */
+.tag { display: inline-block; background: var(--sky); color: var(--ink); border-radius: 999px; padding: .1rem .6rem; font-size: .78rem; font-weight: 500; margin-right: .35rem; vertical-align: 1px; }
+.tag.neg { background: #fde2e2; }
+.qcard h3 { font-size: 1.3rem; }
+.qcard ol, .qlist { margin: .7rem 0 0 1.3rem; font-size: .95rem; }
+.qcard li + li, .qlist li + li { margin-top: .4rem; }
+.qedit { list-style: decimal; margin: .6rem 0 0 1.3rem; }
+.qedit li { background: #fff; border-radius: 14px; padding: .7rem .9rem; margin-top: .5rem; }
+.qedit .tx { display: block; margin-top: .3rem; }
+.qedit .acts { display: flex; gap: .9rem; margin-top: .4rem; font-size: .9rem; }
+.bank-h { font-weight: 500; margin: 1rem 0 .4rem; }
+.bank-q { display: flex; justify-content: space-between; align-items: center; gap: .8rem; background: #fff; border-radius: 12px; padding: .6rem .8rem; margin-top: .35rem; font-size: .95rem; }
+.bank-q .linkbtn { white-space: nowrap; font-size: .88rem; color: var(--blue); }
+.bank-q.used { opacity: .55; }
+
+/* Murid: sosiometri */
+.gb-pick { display: flex; justify-content: space-between; align-items: center; }
+.gb-pick .ord, .whoname .ord { width: 30px; height: 30px; border-radius: 50%; background: var(--blue); color: #fff; display: inline-grid; place-items: center; font-size: .95rem; font-weight: 600; flex: none; }
+.why { margin-top: 1.3rem; }
+.whoname { display: flex; align-items: center; gap: .6rem; font-weight: 500; font-size: 1.08rem; }
+.rchips { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .7rem; }
+.rchip { background: #fff; border: 2px solid transparent; border-radius: 999px; padding: .6rem 1rem; font: inherit; font-size: .98rem; cursor: pointer; text-align: left; }
+.rchip[aria-pressed="true"] { background: var(--sky); border-color: var(--blue); }
+.rother { width: 100%; margin-top: .6rem; border: 2px solid var(--line); border-radius: 999px; padding: .7rem 1rem; font: inherit; background: #fff; }
+
+/* Laporan sosiometri */
+.qnums { margin-top: .5rem; }
+.qhead { font-size: clamp(1.15rem, 2.6vw, 1.45rem); line-height: 1.35; margin-top: 1.4rem; }
+.sumcards { display: grid; grid-template-columns: repeat(3, 1fr); gap: .7rem; margin-top: 1.2rem; }
+.sumcards .card { padding: 1rem 1.1rem; }
+.sumcards .card.ok { background: var(--sky); }
+.sumcards .card.warn { background: #fde2e2; }
+.sumcards .k { font-weight: 500; margin-bottom: .35rem; }
+.tbl.pola td { vertical-align: top; }
+.tbl.matrix th, .tbl.matrix td { padding: .35rem .45rem; font-size: .85rem; }
+.tbl.matrix tr.tot td { font-weight: 600; background: var(--sky-soft); }
+@media (max-width: 640px) { .sumcards { grid-template-columns: 1fr; } }

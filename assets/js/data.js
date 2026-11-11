@@ -1,4 +1,5 @@
 // Isi Examus: daftar asesmen, butir angket, kelas contoh, dan artikel blog.
+import { SOCIO_REASONS, areaOf } from "./socio-data.js";
 
 const I = (inner) => `<svg class="ico" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="14" fill="#e6f2fd"/>${inner}</svg>`;
 export const ICONS = {
@@ -37,16 +38,7 @@ export const ASSESSMENTS = [
 export const getAssessment = (id) => ASSESSMENTS.find((a) => a.id === id);
 
 /* ---------- Sosiometri ---------- */
-const SQ = {
-  pribadi: { id: "pribadi", area: "Pribadi", short: "Teman bercerita", text: "Kalau sedang ada masalah, kepada siapa di kelas ini kamu paling nyaman bercerita?" },
-  sosial: { id: "sosial", area: "Sosial", short: "Teman istirahat", text: "Saat jam istirahat, dengan siapa kamu paling senang menghabiskan waktu?" },
-  belajar: { id: "belajar", area: "Belajar", short: "Kelompok belajar", text: "Kalau ada tugas kelompok, dengan siapa kamu paling ingin satu kelompok?" },
-  karier: { id: "karier", area: "Karier", short: "Teman bicara cita-cita", text: "Dengan siapa kamu paling suka mengobrol tentang cita-cita dan rencana setelah lulus?" },
-};
-export const SOCIO_VARIANTS = [
-  { id: "ringkas", name: "Ringkas", desc: "2 pertanyaan, pilih paling banyak 3 teman. Selesai dalam 3 menit.", questions: [SQ.belajar, SQ.sosial] },
-  { id: "empat-bidang", name: "Empat bidang", desc: "4 pertanyaan, satu untuk tiap bidang layanan BK. Pilih paling banyak 3 teman.", questions: [SQ.pribadi, SQ.sosial, SQ.belajar, SQ.karier] },
-];
+export { SOCIO_VARIANTS } from "./socio-data.js";
 
 /* ---------- Gaya belajar ---------- */
 export const VAK = { V: "Visual", A: "Auditori", K: "Kinestetik" };
@@ -147,11 +139,18 @@ export const SAMPLE_SOCIO = {
   sosial: { 1: [6, 4, 8], 2: [3, 5, 7], 3: [2, 5, 17], 4: [1, 8, 6], 5: [2, 3, 7], 6: [1, 4, 10], 7: [5, 2, 13], 8: [4, 1, 6], 9: [13, 11, 15], 10: [14, 12, 6],
     11: [15, 9, 13], 12: [14, 10, 16], 13: [9, 7, 11], 14: [10, 12, 16], 15: [11, 9, 17], 16: [12, 14, 10], 17: [3, 15, 19], 19: [17, 3, 15], 20: [16, 14, 1] },
 };
-export function sampleSocioResponses() {
+export function sampleSocioResponses(questions) {
   const out = [];
   for (let no = 1; no <= 20; no++) {
     if (!SAMPLE_SOCIO.belajar[no]) continue;
-    out.push({ no, answers: { belajar: SAMPLE_SOCIO.belajar[no], sosial: SAMPLE_SOCIO.sosial[no] } });
+    const answers = { reasons: {} };
+    questions.forEach((q, i) => {
+      const list = (i % 2 ? SAMPLE_SOCIO.sosial : SAMPLE_SOCIO.belajar)[no];
+      answers[q.id] = list;
+      const opts = SOCIO_REASONS[areaOf(q)] || [];
+      answers.reasons[q.id] = Object.fromEntries(list.map((b, k) => [b, [opts[(no + b + k) % opts.length]]]));
+    });
+    out.push({ no, answers });
   }
   return out;
 }

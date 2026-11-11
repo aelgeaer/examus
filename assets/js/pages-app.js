@@ -2,6 +2,7 @@ import { esc, $, $$, toast, go, fmtDate, fmtShort, parseRoster, homePath, genPas
 import { store, isOpen } from "./store.js";
 import { ASSESSMENTS, ICONS, getAssessment, SOCIO_VARIANTS, GAYA_ITEMS, MINAT_ITEMS, KEBUTUHAN_ITEMS } from "./data.js";
 import { header } from "./pages-public.js";
+import { socioSummary } from "./socio-data.js";
 
 const ROLES = ["Guru BK", "Psikolog sekolah", "Wali kelas", "Guru mata pelajaran", "Kepala sekolah", "Lainnya"];
 const itemCount = (type, config) => type === "sosiometri" ? (config.questions || []).length : { "gaya-belajar": GAYA_ITEMS.length, "minat-karier": MINAT_ITEMS.length, kebutuhan: KEBUTUHAN_ITEMS.length }[type];
@@ -67,9 +68,11 @@ export async function dashboard({ user }) {
   const html = `${header(user, "dasbor")}<main class="page"><div class="narrow" style="max-width:800px">
     <h1 class="page-title">Halo, ${esc(user.name || "Bapak/Ibu")}</h1>
     <h2 class="sec-h">Mulai asesmen</h2>
-    <div class="astart">${ASSESSMENTS.map((a) => a.ready
-      ? `<a href="#/mulai/${a.id}">${ICONS[a.id]}<span><b>${esc(a.name)}</b><small>${esc(a.short)}</small></span><span class="go" aria-hidden="true">›</span></a>`
-      : `<a class="off" aria-disabled="true" tabindex="-1">${ICONS[a.id]}<span><b>${esc(a.name)}</b><small>Segera hadir. ${esc(a.short)}</small></span><span></span></a>`).join("")}</div>
+    <div class="astart" id="astart">${[...ASSESSMENTS.filter((a) => a.ready), ...ASSESSMENTS.filter((a) => !a.ready)].map((a, i) => (a.ready
+      ? `<a href="#/mulai/${a.id}"${i >= 3 ? ' class="more"' : ""}>${ICONS[a.id]}<span><b>${esc(a.name)}</b><small>${esc(a.long)}</small></span><span class="go" aria-hidden="true">→</span></a>`
+      : `<a class="off${i >= 3 ? " more" : ""}" aria-disabled="true" tabindex="-1">${ICONS[a.id]}<span><b>${esc(a.name)}</b><small>Segera hadir. ${esc(a.short)}</small></span><span></span></a>`)).join("")}</div>
+    ${ASSESSMENTS.length > 3 ? `<button class="btn" id="astart-toggle" style="margin-top:.8rem" aria-expanded="false">Lihat semua asesmen (${ASSESSMENTS.length})</button>` : ""}
+    <p style="margin-top:.6rem"><a class="small" href="#/angket">Kelola angket sosiometri →</a></p>
     <h2 class="sec-h">Sesi Anda</h2>
     ${sessions.length ? `<div class="list">${sessions.map(sessionItem).join("")}</div>` : `<div class="card"><p>Belum ada sesi. Pilih salah satu asesmen di atas, atau lihat dulu contoh laporan dari kelas yang sudah terisi.</p></div>`}
     <div class="rowflex" style="margin-top:1rem">
@@ -81,6 +84,11 @@ export async function dashboard({ user }) {
   return {
     title: "Dasbor", html,
     mount(root) {
+      const box = $("#astart", root), tg = $("#astart-toggle", root);
+      const setOpen = (on) => { box.classList.toggle("open", on); if (tg) { tg.textContent = on ? "Ringkas" : `Lihat semua asesmen (${ASSESSMENTS.length})`; tg.setAttribute("aria-expanded", String(on)); } try { localStorage.setItem("examus-astart", on ? "1" : "0"); } catch { /* abaikan */ } };
+      let opened = false; try { opened = localStorage.getItem("examus-astart") === "1"; } catch { /* abaikan */ }
+      setOpen(opened);
+      tg?.addEventListener("click", () => setOpen(!box.classList.contains("open")));
       $("#sample-go", root).addEventListener("click", async (e) => {
         e.currentTarget.disabled = true;
         try { const s = await store.addSample($("#sample-type", root).value); toast("Sesi contoh dibuat"); go(`/sesi/${s.id}/hasil`); }
@@ -199,6 +207,8 @@ export async function start({ user, params, query }) {
   const list = await store.listClasses();
   const pre = query.get("kelas") || list[0]?.id;
   const socio = a.id === "sosiometri";
+  const qsets = socio ? [...SOCIO_VARIANTS.map((v) => ({ id: v.id, name: v.name, config: v })), ...(await store.listQuestionnaires().catch(() => [])).map((q) => ({ id: q.id, name: q.name, config: q.config }))] : [];
+  const preQ = qsets.find((x) => x.id === query.get("angket"))?.id || "lengkap";
   const html = `${header(user, "dasbor")}<main class="page"><div class="narrow">
     <a class="back" href="#/dasbor">← Dasbor</a>
     <h1 class="page-title">Mulai ${esc(a.name.toLowerCase())}</h1>
@@ -208,7 +218,9 @@ export async function start({ user, params, query }) {
       <p style="margin-top:.7rem"><a class="btn sm" href="#/kelas/baru?lanjut=/mulai/${a.id}">+ Tambah kelas lain</a></p>`
       : `<div class="card"><p>Belum ada kelas. Tempel daftar nama murid dulu, lalu kembali ke sini.</p></div><p style="margin-top:.7rem"><a class="btn primary" href="#/kelas/baru?lanjut=/mulai/${a.id}">Buat daftar kelas</a></p>`}
     <h2 class="sec-h">${socio ? "Pertanyaan apa yang diajukan?" : "Isi angket"}</h2>
-    ${socio ? SOCIO_VARIANTS.map((v, i) => `<label class="opt"><input type="radio" name="variant" value="${v.id}"${i === 0 ? " checked" : ""}><span class="t">${v.name}</span><span class="d">${v.desc}</span><ol>${v.questions.map((q) => `<li>${esc(q.text)}</li>`).join("")}</ol></label>`).join("")
+    ${socio ? `<p class="muted small">Lengkap: dua pertanyaan per bidang BK. Simpel: satu per bidang. Untuk tiap pertanyaan, murid memilih maksimal beberapa teman dan menyebutkan alasannya.</p>
+      <div style="margin-top:.8rem">${qsets.map((v) => `<label class="opt"><input type="radio" name="variant" value="${esc(v.id)}"${v.id === preQ ? " checked" : ""}><span class="t">${esc(v.name)}</span><span class="d">${esc(socioSummary(v.config))}</span><a class="qlink" href="#/angket/lihat/${esc(v.id)}">Lihat ${v.config.questions.length} pertanyaannya →</a></label>`).join("")}
+      <a class="opt addq" href="#/angket/baru?lanjut=/mulai/sosiometri"><span class="t">+ Tulis pertanyaan sendiri</span><span class="d">Angket Anda nanti muncul di daftar ini.</span></a></div>`
       : `<div class="card"><p>${itemCount(a.id, {})} butir, satu butir per layar. Murid membuka link dari Anda, memilih namanya, lalu mengetuk jawaban yang paling sesuai. Kira-kira 5 menit.</p></div>`}
     <h2 class="sec-h">Batas pengisian</h2>
     <div class="seg" role="radiogroup" aria-label="Batas pengisian">${DEADLINES.map(([d, t]) => `<label><input type="radio" name="days" value="${d}"${d === 14 ? " checked" : ""}><span>${t}</span></label>`).join("")}<label><input type="radio" name="days" value="custom"><span>Pilih tanggal</span></label></div>
@@ -232,11 +244,12 @@ export async function start({ user, params, query }) {
         $("#st-until", root).textContent = dl ? `Pengisian ditutup otomatis ${fmtDate(dl.at, true)}. Anda bisa menutupnya lebih awal.` : "Pilih tanggal penutupan.";
       };
       $("#st-date", root).addEventListener("input", until);
+      $$(".qlink", root).forEach((l) => l.addEventListener("click", () => { const k = $('input[name="kelas"]:checked', root)?.value; if (k) l.href = l.getAttribute("href").split("?")[0] + "?kelas=" + k; }));
       $$('input[name="days"]', root).forEach((r) => r.addEventListener("change", until)); until();
       $("#st-go", root).addEventListener("click", async (e) => {
         const classId = $('input[name="kelas"]:checked', root)?.value;
         if (!classId) { $("#st-err", root).textContent = "Pilih kelas lebih dulu."; return; }
-        const config = socio ? (() => { const v = SOCIO_VARIANTS.find((x) => x.id === $('input[name="variant"]:checked', root).value); return { variant: v.id, maxPick: 3, questions: v.questions }; })() : {};
+        const config = socio ? (() => { const v = qsets.find((x) => x.id === $('input[name="variant"]:checked', root).value); return { variant: v.id, name: v.name, maxPick: v.config.maxPick || 3, reasons: !!v.config.reasons, questions: v.config.questions }; })() : {};
         const dl = deadline();
         if (!dl) { $("#st-err", root).textContent = "Pilih tanggal penutupan."; return; }
         if (dl.at <= Date.now()) { $("#st-err", root).textContent = "Tanggal penutupan harus di masa depan."; return; }

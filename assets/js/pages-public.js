@@ -1,6 +1,6 @@
 import { esc, $, $$, fmtShort, go, toast, homePath, suggestUsername } from "./util.js";
 import { store } from "./store.js";
-import { ASSESSMENTS, ICONS, SAMPLE_CLASS, SAMPLE_SOCIO, SOCIO_VARIANTS, POSTS, getPost } from "./data.js";
+import { ASSESSMENTS, ICONS, SAMPLE_CLASS, SAMPLE_SOCIO, POSTS, getPost } from "./data.js";
 import { analyze, mountSociogram, describe } from "./sociogram.js";
 
 export function header(user, active = "") {
@@ -9,7 +9,7 @@ export function header(user, active = "") {
     ? `<a href="#/blog"${on("blog")}>Blog</a><a href="#/daftar"${on("daftar")}>Daftar</a><a class="pill" href="#/masuk">Masuk</a>`
     : user.isSuper
         ? `<a href="#/admin"${on("admin")}>Admin</a><a href="#/kelas"${on("kelas")}>Kelas</a>`
-        : `<a href="#/dasbor"${on("dasbor")}>Dasbor</a><a href="#/kelas"${on("kelas")}>Kelas</a>${user.isAdmin ? `<a href="#/admin"${on("admin")}>Admin</a>` : ""}`;
+        : `<a href="#/dasbor"${on("dasbor")}>Dasbor</a><a href="#/kelas"${on("kelas")}>Kelas</a><a href="#/angket"${on("angket")}>Angket</a>${user.isAdmin ? `<a href="#/admin"${on("admin")}>Admin</a>` : ""}`;
   const menu = user ? `<details class="usermenu"><summary aria-label="Menu akun"><span class="avatar" aria-hidden="true">${esc((user.name || user.username || "?").trim().charAt(0).toUpperCase())}</span><span class="who"><b>${esc(user.name || user.username)}</b><span>${esc(user.username)}</span></span><span class="caret" aria-hidden="true">▾</span></summary>
       <div class="menu" role="menu"><a role="menuitem" href="#/akun"${on("akun")}>Pengaturan akun</a><button type="button" role="menuitem" data-logout>Keluar</button></div></details>` : "";
   const nav = links + menu;
@@ -111,7 +111,7 @@ export function landing({ user }) {
     mount(root) {
       const members = SAMPLE_CLASS.members;
       const filled = new Set(Object.keys(SAMPLE_SOCIO.belajar).map(Number));
-      const qs = Object.fromEntries(SOCIO_VARIANTS[0].questions.map((q) => [q.id, q]));
+      const qs = { belajar: { text: "Kalau ada tugas kelompok, dengan siapa kamu paling ingin satu kelompok?" }, sosial: { text: "Saat jam istirahat, dengan siapa kamu paling senang menghabiskan waktu?" } };
       let names = false, sg;
       const show = (qid) => {
         const an = analyze(members, SAMPLE_SOCIO[qid], filled);

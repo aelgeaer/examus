@@ -2,6 +2,7 @@ import { esc, $, firstName, toast } from "./util.js";
 import { store } from "./store.js";
 import { GAYA_ITEMS, MINAT_ITEMS, MINAT_SCALE, KEBUTUHAN_ITEMS, VAK } from "./data.js";
 import { gayaProfile, donut, VAK_COLOR } from "./gaya.js";
+import { socioFlow } from "./socio-flow.js";
 
 const top = `<div class="fill-top narrow"><span class="lockup"><img src="assets/img/logo.svg" alt="" width="36" height="36"><span class="words"><span class="name">Examus</span><span class="by">by prepod</span></span></span></div>`;
 const message = (title, text) => `<div class="fill">${top}<main class="fill-main narrow"><h1>${esc(title)}</h1><p class="page-sub">${esc(text)}</p></main></div>`;
@@ -78,7 +79,7 @@ function gayaFlow(pub) {
             ${donut(r.c, "Perbandingan gaya belajarmu")}
             <h1>${esc(r.title)}</h1><p class="lead">${esc(r.desc)}</p>
             <div class="gb-stack" aria-hidden="true">${r.order.filter((k) => r.c[k] > 0).map((k) => `<i style="flex:${r.c[k]};background:${VAK_COLOR[k]}"></i>`).join("")}</div>
-            <div class="gb-legend">${["V", "A", "K"].map((k) => `<span><span class="d" style="background:${VAK_COLOR[k]}"></span>${VAK[k]} <b>${r.pct[k]}%</b></span>`).join("")}</div>
+            <div class="gb-legend">${["V", "A", "K"].map((k) => `<span><span class="dot" style="background:${VAK_COLOR[k]}"></span>${VAK[k]} <b>${r.pct[k]}%</b></span>`).join("")}</div>
             <div class="gb-tips"><h2>Coba cara ini saat belajar</h2><ul>${r.tips.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>
             ${pub.roster.some((m) => !filled.has(m.no)) ? `<button class="btn block gb-again" id="gb-again">Teman lain mau mengisi di HP ini</button>` : ""}</div>`;
           $("#gb-again", main)?.addEventListener("click", () => { me = null; result = null; goTo("name"); });
@@ -97,6 +98,7 @@ export async function student({ params }) {
   if (!pub.open) return { title: "Angket", html: message("Pengisian sudah ditutup", "Terima kasih. Hubungi gurumu kalau kamu belum sempat mengisi.") };
 
   if (pub.type === "gaya-belajar") return gayaFlow(pub);
+  if (pub.type === "sosiometri") return socioFlow(pub, top);
 
   return {
     title: `Angket ${pub.className}`,

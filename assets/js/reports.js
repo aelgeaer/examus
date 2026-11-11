@@ -3,79 +3,13 @@ import { store } from "./store.js";
 import { getAssessment, VAK, GAYA_ITEMS, RIASEC, MINAT_ITEMS, BIDANG, KEBUTUHAN_ITEMS } from "./data.js";
 import { gayaProfile, donut, VAK_COLOR } from "./gaya.js";
 import { header } from "./pages-public.js";
-import { analyze, mountSociogram, describe, svgToPngBlob } from "./sociogram.js";
+import { socioReport } from "./report-socio.js";
 
 const pct = (n, d) => (d ? Math.round((n / d) * 100) : 0);
 const bars = (rows, max) => `<div class="bars">${rows.map(([name, val, label]) => `<div class="b"><span class="nm">${esc(name)}</span><span class="track"><i style="width:${max ? (val / max) * 100 : 0}%"></i></span><span class="val">${esc(label ?? val)}</span></div>`).join("")}</div>`;
 const table = (head, rows) => `<div class="tblwrap"><table class="tbl"><thead><tr>${head.map((h) => `<th${h.num ? ' class="num"' : ""}>${esc(h.t ?? h)}</th>`).join("")}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c, i) => `<td${head[i].num ? ' class="num"' : ""}${head[i].wrap ? ' class="wrapok"' : ""}>${esc(c)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
 const tips = (list) => `<h2 class="sec-h">Saran tindak lanjut</h2><div class="card"><ul class="tips">${list.map((t) => `<li>${t}</li>`).join("")}</ul></div>`;
 const names = (rows) => esc(rows.map((r) => firstName(r.name)).join(", "));
-
-/* ---------- Sosiometri ---------- */
-function socio(s, res) {
-  const filled = new Set(res.map((r) => r.no));
-  const qs = s.config.questions || [];
-  const per = qs.map((q) => {
-    const picks = {}; res.forEach((r) => (picks[r.no] = r.answers?.[q.id] || []));
-    return { q, an: analyze(s.roster, picks, filled) };
-  });
-  const body = `
-    <div class="report-tabs no-print" role="tablist" aria-label="Pertanyaan">${per.map(({ q }, i) => `<button role="tab" data-i="${i}" aria-selected="${i === 0}">${esc(q.short)}</button>`).join("")}</div>
-    ${per.map(({ q, an }, i) => {
-      const sorted = [...an.rows].sort((a, b) => b.count - a.count || b.score - a.score || a.no - b.no);
-      const t = [];
-      if (an.isolates.length) t.push(`Temui <strong>${names(an.isolates)}</strong> secara pribadi dalam minggu ini. Amati juga saat istirahat dan kerja kelompok.`);
-      if (an.star) t.push(`<strong>${esc(firstName(an.star.name))}</strong> paling banyak dipilih. Ia bisa diajak menjadi tutor sebaya atau penghubung bagi murid yang belum dipilih.`);
-      if (an.oneWay.length) t.push(`Memilih tetapi belum dipilih balik: ${names(an.oneWay)}. Pertimbangkan menempatkan mereka bersama salah satu teman pilihannya.`);
-      t.push("Saat menyusun kelompok, pasangkan murid yang belum dipilih dengan teman yang ia pilih sendiri, bukan dengan sesama murid yang belum dipilih.");
-      if (an.unfilled.length) t.push(`Belum mengisi: ${names(an.unfilled)}. Peta akan lebih lengkap setelah mereka mengisi.`);
-      t.push("Peta ini memotret satu hari. Cocokkan dengan pengamatan Anda sebelum mengambil kesimpulan.");
-      return `<section class="rep-q${i ? " hide" : ""}" data-i="${i}">
-        <p class="muted">Pertanyaan ${i + 1}, bidang ${esc(q.area.toLowerCase())}</p>
-        <h2 style="font-size:clamp(1.3rem,3vw,1.8rem);margin:.2rem 0 1rem">${esc(q.text)}</h2>
-        <div class="rep-grid">
-          <div class="rep-plate"><div class="sg-mount"></div></div>
-          <div class="stack">
-            <div class="readout" aria-live="polite">${describe(an, null)}</div>
-            <div class="kv">
-              <div class="card"><div class="k">Sudah mengisi</div><div class="v">${an.N - an.unfilled.length} / ${an.N}</div></div>
-              <div class="card"><div class="k">Pasangan saling memilih</div><div class="v">${an.mutual.length}</div></div>
-              <div class="card"><div class="k">Belum dipilih</div><div class="v">${an.isolates.length}</div></div>
-            </div>
-            <div class="rowflex no-print"><button class="btn dark sm" data-act="names" aria-pressed="false">Tampilkan nama</button><button class="btn sm" data-act="png">Unduh gambar</button></div>
-          </div>
-        </div>
-        <h2 class="sec-h">Indeks per murid</h2>
-        ${table(["No", "Nama", "L/P", { t: "Dipilih", num: 1 }, { t: "Skor", num: 1 }, { t: "Indeks", num: 1 }, "Keterangan"], sorted.map((r) => [r.no, r.name, r.g || "-", r.count, r.score, r.index.toFixed(2), r.status + (r.filled ? "" : " (belum mengisi)")]))}
-        <p class="muted small" style="margin-top:.5rem">Dipilih: berapa teman yang memilih. Skor: pilihan pertama bernilai 3, kedua 2, ketiga 1. Indeks: dipilih dibagi jumlah murid lain di kelas.</p>
-        ${tips(t)}
-      </section>`;
-    }).join("")}`;
-  return {
-    body,
-    csv() {
-      const rows = [["Pertanyaan", "No", "Nama", "L/P", "Dipilih", "Skor", "Indeks", "Keterangan", "Pilihan 1", "Pilihan 2", "Pilihan 3"]];
-      per.forEach(({ q, an }) => an.rows.forEach((r) => rows.push([q.short, r.no, r.name, r.g, r.count, r.score, r.index.toFixed(2).replace(".", ","), r.status, ...[0, 1, 2].map((i) => (r.picks[i] ? an.byNo.get(r.picks[i]).name : ""))])));
-      return rows;
-    },
-    mount(root) {
-      const secs = $$(".rep-q", root);
-      secs.forEach((sec, i) => {
-        const { an, q } = per[i]; const read = $(".readout", sec);
-        const sg = mountSociogram($(".sg-mount", sec), s.roster, an, { onFocus: (row) => (read.innerHTML = describe(an, row)) });
-        let on = false;
-        $('[data-act="names"]', sec).addEventListener("click", (e) => { on = !on; sg.toggleNames(on); e.currentTarget.setAttribute("aria-pressed", String(on)); e.currentTarget.textContent = on ? "Sembunyikan nama" : "Tampilkan nama"; });
-        $('[data-act="png"]', sec).addEventListener("click", async () => {
-          try { download(`sosiogram-${s.className}-${q.id}.png`.replace(/\s+/g, "-").toLowerCase(), await svgToPngBlob($("svg", sg.fig))); } catch { toast("Gambar tidak bisa dibuat di browser ini"); }
-        });
-      });
-      $$(".report-tabs button", root).forEach((b) => b.addEventListener("click", () => {
-        $$(".report-tabs button", root).forEach((x) => x.setAttribute("aria-selected", String(x === b)));
-        secs.forEach((sec) => sec.classList.toggle("hide", sec.dataset.i !== b.dataset.i));
-      }));
-    },
-  };
-}
 
 /* ---------- Gaya belajar ---------- */
 const STRATEGI = {
@@ -100,12 +34,11 @@ function gaya(s, res) {
   const strategies = [...STRATEGI[order[0]], "Variasikan cara mengajar: tiap materi dijelaskan, diperlihatkan, dan dicoba.", "Pakai hasil ini agar murid nyaman belajar, bukan untuk membatasi cara mereka belajar."];
   const share = Math.round((done.length / s.roster.length) * 100);
   const body = `
-    ${share < 80 ? `<div class="notice">Baru ${share}% yang mengisi. Gambaran kelas lebih tepat setelah 80% murid mengisi.</div>` : ""}
     <div class="gsum">
       ${donut(tot, "Perbandingan gaya belajar kelas")}
       <div>
         <h2>${esc(headline)}</h2>
-        <dl class="glegend">${"VAK".split("").map((k) => `<dt><span class="d" style="background:${VAK_COLOR[k]}"></span>${VAK[k]}</dt><dd>${cp[k]}%</dd>`).join("")}</dl>
+        <dl class="glegend">${"VAK".split("").map((k) => `<dt><span class="dot" style="background:${VAK_COLOR[k]}"></span>${VAK[k]}</dt><dd>${cp[k]}%</dd>`).join("")}</dl>
         <p style="margin-top:.6rem">Per murid: ${esc(perStudent || "-")}.</p>
         <p class="muted" style="margin-top:.4rem">${esc(STRATEGI[order[0]][0])}</p>
       </div>
@@ -116,7 +49,7 @@ function gaya(s, res) {
 
     <h2 class="sec-h">Murid per gaya</h2>
     <p class="muted">Berguna untuk membagi kelompok yang beragam: ambil satu atau dua murid dari tiap kotak.</p>
-    <div class="ggroups">${Object.keys(groups).map((k) => `<div class="card"><p class="gh"><span class="d" style="background:${VAK_COLOR[k] || "#cdeedd"}"></span>${GROUP[k]} <span class="muted">${groups[k].length}</span></p>
+    <div class="ggroups">${Object.keys(groups).map((k) => `<div class="card"><p class="gh"><span class="dot" style="background:${VAK_COLOR[k] || "#cdeedd"}"></span>${GROUP[k]} <span class="muted">${groups[k].length}</span></p>
       ${groups[k].length ? `<ul>${groups[k].map((r) => `<li><span>${esc(r.name)}</span>${r.p.combo ? `<span class="muted small">+ ${VAK[r.p.top[1]]}</span>` : ""}</li>`).join("")}</ul>` : `<p class="muted">-</p>`}</div>`).join("")}</div>
 
     <h2 class="sec-h">Skor per murid</h2>
@@ -190,7 +123,7 @@ function kebutuhan(s, res) {
   return { body, csv: () => [["Pernyataan", "Bidang", "Murid", "Persen"], ...items.map((x) => [x.text, BIDANG[x.k], x.yes, pct(x.yes, n)]), [], ["No", "Nama", ...KEYS.map((k) => BIDANG[k]), "Total"], ...rows] };
 }
 
-const BUILD = { sosiometri: socio, "gaya-belajar": gaya, "minat-karier": minat, kebutuhan };
+const BUILD = { sosiometri: socioReport, "gaya-belajar": gaya, "minat-karier": minat, kebutuhan };
 
 export async function report({ user, params }) {
   const s = await store.getSession(params.id);
@@ -206,6 +139,7 @@ export async function report({ user, params }) {
     <p class="eyebrow">Laporan ${esc(a.name.toLowerCase())} · ${today}</p>
     <h1 class="page-title" style="margin-top:.2rem">${esc(s.className)}</h1>
     <p class="page-sub">${res.length} dari ${s.roster.length} murid mengisi (${pct(res.length, s.roster.length)}%).</p>
+    ${pct(res.length, s.roster.length) < 80 ? `<div class="notice">Baru ${pct(res.length, s.roster.length)}% yang mengisi. Gambaran kelas lebih tepat setelah 80% murid mengisi.</div>` : ""}
     <p class="muted small" style="margin-top:.4rem">Rahasia. Hanya untuk guru yang berwenang.</p>
     <div class="rowflex no-print" style="margin-top:1.2rem"><button class="btn primary sm" id="rp-print">Cetak atau simpan PDF</button><button class="btn sm" id="rp-csv">Unduh CSV untuk Excel</button></div>
     ${r.body}

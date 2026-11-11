@@ -3,6 +3,7 @@ import { esc, go, homePath } from "./util.js";
 import { landing, blog, post, legal, login, register, notFound, header } from "./pages-public.js";
 import { onboarding, dashboard, classes, classEdit, start, session, account, admin, changePassword } from "./pages-app.js";
 import { report } from "./reports.js";
+import { questionnaires, questionnaireView, questionnaireEdit } from "./pages-angket.js";
 import { student } from "./pages-student.js";
 
 // auth: "any" = semua akun yang sudah masuk, "staff" = guru dan admin, "admin" = admin.
@@ -22,6 +23,9 @@ const ROUTES = [
   ["/mulai/:type", start, "staff"],
   ["/sesi/:id", session, "staff"],
   ["/sesi/:id/hasil", report, "staff"],
+  ["/angket", questionnaires, "staff"],
+  ["/angket/lihat/:id", questionnaireView, "staff"],
+  ["/angket/:id", questionnaireEdit, "staff"],
   ["/akun", account, "any"],
   ["/admin", admin, "admin"],
 ];

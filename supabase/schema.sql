@@ -111,6 +111,17 @@ create table if not exists public.responses (
   unique (session_id, member_no)
 );
 
+-- Angket sosiometri buatan guru: { maxPick, reasons, questions: [{ id, area, text, neg? }] }.
+-- Hanya pemiliknya yang bisa melihat dan mengubah. Saat sesi dimulai, isinya disalin ke sessions.config.
+create table if not exists public.questionnaires (
+  id uuid primary key default gen_random_uuid(),
+  owner uuid not null default auth.uid() references public.profiles on delete cascade,
+  school_id uuid references public.schools on delete cascade,
+  name text not null check (length(name) between 1 and 60),
+  config jsonb not null check (coalesce(jsonb_typeof(config -> 'questions') = 'array', false) and pg_column_size(config) < 20000),
+  created_at timestamptz not null default now()
+);
+
 /* ------------------------------------------------------------------ */
 /* Fungsi bantu (dipakai oleh aturan akses)                            */
 /* ------------------------------------------------------------------ */
@@ -145,6 +156,7 @@ language sql stable security definer set search_path = public as $$
 $$;
 
 alter table public.sessions alter column school_id set default public.my_school();
+alter table public.questionnaires alter column school_id set default public.my_school();
 
 /* ------------------------------------------------------------------ */
 /* Row Level Security                                                  */
@@ -156,6 +168,7 @@ alter table public.profiles enable row level security;
 alter table public.credentials enable row level security;
 alter table public.sessions enable row level security;
 alter table public.responses enable row level security;
+alter table public.questionnaires enable row level security;
 
 drop policy if exists "sekolah: baca" on public.schools;
 create policy "sekolah: baca" on public.schools for select to authenticated using (public.can_see_school(id));
@@ -191,6 +204,10 @@ create policy "jawaban: baca" on public.responses for select to authenticated
   using (exists (select 1 from public.sessions s
                  where s.id = session_id and public.can_see_school(s.school_id) and (s.owner = auth.uid() or public.is_admin())));
 
+drop policy if exists "angket: milik sendiri" on public.questionnaires;
+create policy "angket: milik sendiri" on public.questionnaires for all to authenticated
+  using (owner = auth.uid()) with check (owner = auth.uid() and public.my_kind() in ('guru', 'admin'));
+
 -- Hak akses tabel. credentials sama sekali tidak bisa diakses langsung.
 revoke all on all tables in schema public from anon, authenticated;
 grant select on public.schools to authenticated;
@@ -200,6 +217,8 @@ grant update (name, title, city, letterhead, onboarded) on public.profiles to au
 grant select on public.classes, public.class_teachers, public.responses to authenticated;
 grant select, delete on public.sessions to authenticated;
 grant update (closed, closes_at) on public.sessions to authenticated;
+grant select, insert, delete on public.questionnaires to authenticated;
+grant update (name, config) on public.questionnaires to authenticated;
 
 /* ------------------------------------------------------------------ */
 /* Pembuatan akun (internal)                                           */
@@ -458,6 +477,7 @@ begin
   if p.school_id is null then raise exception 'Admin pusat tidak membuat sesi. Pakai akun admin sekolah atau guru.'; end if;
   if not public.has_class_access(p_class) then raise exception 'Kelas tidak ditemukan.'; end if;
   if coalesce(length(p_type), 0) not between 1 and 40 then raise exception 'Jenis asesmen tidak dikenal.'; end if;
+  if pg_column_size(coalesce(p_config, '{}')) > 30000 then raise exception 'Pengaturan sesi terlalu besar.'; end if;
   if p_until is not null then
     if p_until <= now() or p_until > now() + interval '90 days' then raise exception 'Tanggal batas harus di masa depan dan paling lama 90 hari dari sekarang.'; end if;
   elsif p_days is null or p_days < 1 or p_days > 90 then raise exception 'Batas pengisian 1 sampai 90 hari.'; end if;

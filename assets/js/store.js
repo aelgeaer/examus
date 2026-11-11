@@ -6,8 +6,9 @@ import { SAMPLE_CLASS, SOCIO_VARIANTS, sampleSocioResponses, sampleGeneric } fro
 
 const DAY = 86400000;
 const isOpen = (s) => !s.closed && Date.now() < new Date(s.closesAt).getTime();
-const sampleConfig = (type) => (type === "sosiometri" ? { variant: "ringkas", maxPick: 3, questions: SOCIO_VARIANTS[0].questions } : {});
-const sampleAnswers = (type) => (type === "sosiometri" ? sampleSocioResponses() : sampleGeneric(type));
+const SAMPLE_SET = SOCIO_VARIANTS.find((v) => v.id === "simpel");
+const sampleConfig = (type) => (type === "sosiometri" ? { variant: SAMPLE_SET.id, name: SAMPLE_SET.name, maxPick: SAMPLE_SET.maxPick, reasons: true, questions: SAMPLE_SET.questions } : {});
+const sampleAnswers = (type) => (type === "sosiometri" ? sampleSocioResponses(SAMPLE_SET.questions) : sampleGeneric(type));
 
 export const configured = Boolean(CONFIG.SUPABASE_URL && CONFIG.SUPABASE_ANON_KEY);
 
@@ -93,6 +94,15 @@ async function makeSupabase() {
         p_rows: sampleAnswers(type).map((r) => ({ no: r.no, answers: r.answers })),
       })));
     },
+
+    // Angket sosiometri buatan guru (hanya pemiliknya yang bisa melihat dan mengubah).
+    async listQuestionnaires() { return must(await sb.from("questionnaires").select("id, name, config, created_at").eq("owner", await userId()).order("created_at", { ascending: false })); },
+    async getQuestionnaire(id) { return must(await sb.from("questionnaires").select("id, name, config").eq("id", id).maybeSingle()); },
+    async saveQuestionnaire({ id, name, config }) {
+      if (id) return must(await sb.from("questionnaires").update({ name, config }).eq("id", id).select("id").single());
+      return must(await sb.from("questionnaires").insert({ name, config }).select("id").single());
+    },
+    async deleteQuestionnaire(id) { must(await sb.from("questionnaires").delete().eq("id", id)); },
 
     // Murid (lewat link, tanpa akun)
     async publicSession(code) { return must(await sb.rpc("session_public", { p_code: code })); },

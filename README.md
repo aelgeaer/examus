@@ -9,6 +9,7 @@ Asesmen yang sudah berjalan: sosiometri (dengan sosiogram interaktif), gaya bela
 - **Guru mendaftar sendiri** di halaman Daftar: nama lengkap, pilih sekolah (salah satu dari lima), nama akun, dan kata sandi. Admin juga bisa **membuatkan akun guru** bila perlu; akun buatan admin wajib mengganti sandi saat masuk pertama.
 - **Masuk dengan nama akun dan kata sandi**, tanpa email.
 - **Guru membuat kelasnya sendiri** dengan menempel daftar nama dari Excel atau WhatsApp. Admin sekolah melihat semua kelas di sekolahnya dan boleh menambahkan guru lain sebagai pemegang kelas.
+- **Angket sosiometri bisa dibuat sendiri.** Selain angket siap pakai (Lengkap 8 pertanyaan, Simpel 4 pertanyaan), guru bisa menyusun angket dari bank pertanyaan per bidang BK atau menulis pertanyaannya sendiri, mengatur jumlah teman yang dipilih (1 sampai 5), dan memilih apakah murid ditanya alasannya. Angket disimpan di tabel `questionnaires` dan hanya terlihat oleh pembuatnya.
 - **Murid tidak punya akun.** Guru membagikan link sesi (WhatsApp, salin link, atau kode QR). Murid membuka link, memilih namanya, lalu mengisi. Satu nama hanya bisa mengisi sekali.
 - Admin bisa **melihat kata sandi awal** akun yang ia buat selama pemilik belum menggantinya, dan bisa **mengatur ulang** bila lupa. Admin bisa **menambah admin baru**.
 - **Lima sekolah dalam satu database, datanya terpisah.** Setiap data punya `school_id` dan Row Level Security mencegah akun satu sekolah membaca data sekolah lain.
