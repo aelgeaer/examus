@@ -4,7 +4,8 @@ import { getAssessment, VAK, GAYA_ITEMS, RIASEC, MINAT_ITEMS, BIDANG, KEBUTUHAN_
 import { gayaProfile, donut, VAK_COLOR } from "./gaya.js";
 import { header } from "./pages-public.js";
 import { socioReport } from "./report-socio.js";
-import { minatReport, kekuatanReport, emosiReport, kepribadianReport, akpdReport, amanReport } from "./report-more.js";
+import { minatReport, kekuatanReport, emosiReport, kepribadianReport, akpdReport } from "./report-more.js";
+import { amanReport } from "./report-aman.js";
 
 const pct = (n, d) => (d ? Math.round((n / d) * 100) : 0);
 const bars = (rows, max) => `<div class="bars">${rows.map(([name, val, label]) => `<div class="b"><span class="nm">${esc(name)}</span><span class="track"><i style="width:${max ? (val / max) * 100 : 0}%"></i></span><span class="val">${esc(label ?? val)}</span></div>`).join("")}</div>`;

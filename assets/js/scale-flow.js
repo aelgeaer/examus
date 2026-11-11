@@ -9,7 +9,7 @@ const CHECK = `<svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true
 export function scaleFlow(pub, top) {
   const def = INSTR[pub.type], cfg = pub.config || {};
   const items = def.items(cfg), extra = def.extra ? def.extra(cfg) : [];
-  const screens = [...items.map((it, i) => ({ key: i, text: it.text, options: it.options || def.options(cfg), stem: def.stem, ask: def.ask })),
+  const screens = [...items.map((it, i) => ({ key: i, text: it.text, options: it.options || def.options(cfg), stem: def.stem, ask: it.ask ?? def.ask })),
     ...extra.map((x) => ({ key: x.key, text: x.text, options: x.options, ask: "" }))];
   const badge = (j) => (def.letters ? "ABCDE"[j] : String(j + 1));
   return {

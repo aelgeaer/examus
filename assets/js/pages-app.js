@@ -215,6 +215,7 @@ function settingsHtml(a) {
 function settingsConfig(a, root) {
   const c = { v: 2 };
   if (a.id === "minat-karier") c.scale = 5;
+  if (a.id === "aman") c.n = 40;
   if (a.settings === "consent" || a.settings === "phq") c.consentAt = new Date().toISOString();
   if (a.settings === "phq") c.variant = $('input[name="phq"]:checked', root).value;
   if (a.settings === "jenjang") { c.jenjang = $('input[name="jenjang"]:checked', root).value; c.n = 60; }

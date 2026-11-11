@@ -8,7 +8,7 @@ import { INSTR, sampleInstr } from "./instruments.js";
 const DAY = 86400000;
 const isOpen = (s) => !s.closed && Date.now() < new Date(s.closesAt).getTime();
 const SAMPLE_SET = SOCIO_VARIANTS.find((v) => v.id === "simpel");
-const INSTR_CFG = { "minat-karier": { scale: 5 }, emosi: { variant: "phq9" }, akpd: { jenjang: "smp", n: 60 } };
+const INSTR_CFG = { "minat-karier": { scale: 5 }, emosi: { variant: "phq9" }, akpd: { jenjang: "smp", n: 60 }, aman: { n: 40 } };
 const sampleConfig = (type) => (type === "sosiometri" ? { variant: SAMPLE_SET.id, name: SAMPLE_SET.name, maxPick: SAMPLE_SET.maxPick, reasons: true, questions: SAMPLE_SET.questions } : INSTR_CFG[type] || {});
 const sampleAnswers = (type) => (type === "sosiometri" ? sampleSocioResponses(SAMPLE_SET.questions) : INSTR[type] && type !== "gaya-belajar" ? sampleInstr(type, sampleConfig(type), SAMPLE_CLASS.members) : sampleGeneric(type));
 

@@ -7,10 +7,8 @@ import { RIASEC, MINAT_ITEMS, GAYA_ITEMS, VAK } from "./data.js";
 import { radar } from "./charts.js";
 import { gayaProfile, donut, VAK_COLOR } from "./gaya.js";
 
-// Layanan bantuan untuk anak: Healing119 (Kemenkes) dan SAPA 129 (KemenPPPA). Periksa nomornya secara berkala.
-const talk = (darurat = false) => `<div class="gb-tips"><h2>Mau cerita?</h2><p style="margin-top:.4rem">Guru BK dan wali kelasmu siap mendengar. Atau hubungi:</p>
-  <p style="margin-top:.7rem"><b style="font-weight:600">Healing119</b><br><span class="muted small">Teman bicara, gratis 24 jam: telepon <a href="tel:119">119</a> lalu tekan 8, atau <a href="https://healing119.id" target="_blank" rel="noopener">healing119.id</a></span></p>
-  <p style="margin-top:.7rem"><b style="font-weight:600">SAPA 129</b><br><span class="muted small">Kalau mengalami atau melihat kekerasan: telepon <a href="tel:129">129</a> atau WhatsApp <a href="https://wa.me/628111129129" target="_blank" rel="noopener">08111-129-129</a></span></p>${darurat ? `<p style="margin-top:.7rem"><b style="font-weight:600">Darurat</b><br><span class="muted small">IGD rumah sakit atau puskesmas terdekat</span></p>` : ""}</div>`;
+import { talk } from "./help.js";
+import { PR_ITEMS as PR40, amanResult } from "./aman.js";
 const TALK = talk();
 const HELP = `<div class="gb-tips"><h2>Kalau butuh teman bicara</h2><ul><li>Ceritakan kepada guru BK, wali kelas, atau orang dewasa yang kamu percaya.</li><li>Kalau kamu atau temanmu dalam bahaya, segera minta tolong orang dewasa terdekat atau telepon 112.</li></ul></div>`;
 const thanks = (name, body = "") => `<p class="gb-eyebrow">Terima kasih, ${esc(name)}</p><h1>Jawabanmu sudah tersimpan.</h1><p class="lead" style="margin-top:.5rem">Hanya gurumu yang bisa melihat jawabanmu.</p>${body}`;
@@ -286,7 +284,7 @@ export function akpdProfile(a, cfg) {
 /* ---------------- Deteksi perundungan ---------------- */
 export const PR_ASPEK = { korban: "Mengalami", pelaku: "Melakukan", saksi: "Menyaksikan", iklim: "Rasa aman" };
 const pr = (k, text, extra = {}) => ({ k, text, ...extra });
-export const PR_ITEMS = [
+export const PR_OLD_ITEMS = [
   pr("korban", "Aku diejek atau dihina oleh teman.", { form: "Ejekan" }), pr("pelaku", "Aku mengejek atau menghina teman."), pr("saksi", "Aku melihat teman diejek atau dihina."), pr("iklim", "Aku merasa aman di sekolah.", { pos: true }),
   pr("korban", "Aku dipanggil dengan julukan yang tidak kusukai.", { form: "Julukan" }), pr("pelaku", "Aku memanggil teman dengan julukan yang tidak ia sukai."), pr("saksi", "Aku melihat teman sengaja dijauhi oleh kelompoknya."), pr("iklim", "Aku merasa aman di kelas.", { pos: true }),
   pr("korban", "Aku sengaja dijauhi atau tidak diajak bergabung.", { form: "Dikucilkan" }), pr("pelaku", "Aku mengajak teman lain menjauhi seseorang."), pr("saksi", "Aku melihat teman didorong atau dipukul."), pr("iklim", "Aku merasa aman di toilet, kantin, dan halaman sekolah.", { pos: true }),
@@ -300,14 +298,14 @@ export const PR_OPTS = [{ v: 0, t: "Tidak pernah" }, { v: 1, t: "Jarang" }, { v:
 // Klasifikasi mengikuti batas Solberg & Olweus (2003): murid dianggap mengalami atau melakukan perundungan
 // bila setidaknya satu bentuk terjadi "kadang-kadang" atau lebih (setara 2-3 kali sebulan). "Jarang" = pantau.
 // Kekerasan fisik atau ancaman pada tingkat itu didahulukan.
-export function prProfile(a) {
+export function prProfileOld(a) {
   const val = (i) => Number(a?.[i]) || 0;
-  const idx = (k, f = () => true) => PR_ITEMS.map((it, i) => [it, i]).filter(([it]) => it.k === k && f(it)).map(([, i]) => i);
+  const idx = (k, f = () => true) => PR_OLD_ITEMS.map((it, i) => [it, i]).filter(([it]) => it.k === k && f(it)).map(([, i]) => i);
   const mean = (ids) => ids.reduce((t, i) => t + val(i), 0) / ids.length;
   const maxOf = (ids) => Math.max(0, ...ids.map(val));
   const V = idx("korban"), D = idx("pelaku");
   const seriousV = idx("korban", (it) => it.serious).some((i) => val(i) >= 2);
-  const forms = V.filter((i) => val(i) >= 2).map((i) => PR_ITEMS[i].form);
+  const forms = V.filter((i) => val(i) >= 2).map((i) => PR_OLD_ITEMS[i].form);
   const lvl = (ids, serious) => (serious ? "didahulukan" : maxOf(ids) >= 2 ? "perlu" : maxOf(ids) >= 1 ? "pantau" : "");
   const victim = lvl(V, seriousV), doer = lvl(D, idx("pelaku", (it) => it.serious).some((i) => val(i) >= 2));
   return {
@@ -449,13 +447,14 @@ export const INSTR = {
     },
   },
   aman: {
-    heading: "Rasa aman di sekolah",
-    intro: () => [["Tiga bulan terakhir", `Ada ${PR_ITEMS.length} kalimat tentang hal yang kamu alami, lakukan, atau lihat di sekolah selama tiga bulan terakhir.`], ["Tujuannya melindungi", "Angket ini membantu sekolah melindungi semua murid, bukan untuk menghukum. Jawab dengan jujur."], ["Rahasia, hanya gurumu yang melihat", "Teman-temanmu tidak bisa melihat jawabanmu."]],
-    items: () => PR_ITEMS.map((it) => ({ text: it.text })),
+    heading: "Bagaimana suasana di sekolahmu?",
+    intro: (cfg) => cfg.n === 40 ? [["Kamu aman di sekolah?", "Ada 40 kalimat tentang 3 bulan terakhir. Sekitar 10 menit."], ["Pilih seberapa sering", "Tidak ada jawaban yang salah. Jawab sejujurnya.", ["Tidak pernah", "Jarang", "Kadang-kadang", "Sering", "Sangat sering"]], ["Hanya gurumu yang membaca", "Bukan teman-temanmu. Dan bukan untuk menghukum siapa pun."], ["Kalau ada yang membahayakanmu", "Gurumu akan bertindak untuk melindungimu. Kamu tidak sendirian."]] : [["Tiga bulan terakhir", `Ada ${PR_OLD_ITEMS.length} kalimat tentang hal yang kamu alami, lakukan, atau lihat di sekolah selama tiga bulan terakhir.`], ["Tujuannya melindungi", "Angket ini membantu sekolah melindungi semua murid, bukan untuk menghukum. Jawab dengan jujur."], ["Rahasia, hanya gurumu yang melihat", "Teman-temanmu tidak bisa melihat jawabanmu."]],
+    items: (cfg) => (cfg.n === 40 ? PR40.map((x) => ({ text: x.text, options: x.options, ask: x.ask, neg: x.neg })) : PR_OLD_ITEMS.map((it) => ({ text: it.text }))),
     ask: "Seberapa sering ini terjadi selama tiga bulan terakhir?",
     options: () => PR_OPTS,
     result(a, cfg, name) {
-      const p = prProfile(a);
+      if (cfg.n === 40) return amanResult(a, name);
+      const p = prProfileOld(a);
       return thanks(name, `${p.victim ? `<div class="gb-tips"><h2>Kamu tidak sendirian</h2><ul><li>Apa yang kamu alami bukan salahmu.</li><li>Ceritakan kepada guru BK atau wali kelas. Mereka akan membantumu dengan menjaga kerahasiaan.</li><li>Simpan bukti bila ada, misalnya tangkapan layar pesan.</li></ul></div>` : ""}
         <div class="gb-tips"><h2>Langkah kecil yang bisa kamu lakukan</h2><ul><li>Kalau melihat teman diganggu, temani dia dan ajak menjauh dari situasi itu.</li><li>Laporkan kepada guru. Melapor bukan mengadu, tetapi melindungi.</li><li>Pikirkan dulu sebelum mengirim komentar atau pesan tentang orang lain.</li></ul></div>${HELP}`);
     },
@@ -472,7 +471,9 @@ export function sampleInstr(type, cfg, members) {
       const opts = it.options || def.options(cfg);
       const r = rnd(m.no, i);
       const skew = type === "emosi" || type === "aman" || type === "kekuatan" ? r * r * (m.no % 5 === 0 ? 1.8 : 1) : r;
-      answers[i] = (type === "emosi" || type === "aman" || type === "kekuatan" ? [...opts].sort((x, y) => x.v - y.v) : opts)[Math.min(opts.length - 1, Math.floor(skew * opts.length))].v;
+      // Butir kesesuaian (iklim sekolah): contoh condong ke iklim baik, kecuali murid tertentu.
+      const ordered = it.options && type === "aman" ? [...opts].sort((x, y) => (it.neg ? x.v - y.v : y.v - x.v)) : type === "emosi" || type === "aman" || type === "kekuatan" ? [...opts].sort((x, y) => x.v - y.v) : opts;
+      answers[i] = ordered[Math.min(opts.length - 1, Math.floor(skew * opts.length))].v;
     });
     (def.extra ? def.extra(cfg) : []).forEach((x) => (answers[x.key] = x.options[Math.floor(rnd(m.no, 99) * 2)].v));
     return { no: m.no, answers };

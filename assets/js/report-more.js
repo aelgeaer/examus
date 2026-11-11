@@ -5,18 +5,18 @@ import { radar } from "./charts.js";
 import { RIASEC, MINAT_ITEMS } from "./data.js";
 import {
   RIASEC_EX, RIASEC_KEYS, RIASEC_LABEL, minatProfile, KK_AREAS, KK_ITEMS, kkProfile, kkLevel, kkTotalLevel, kkLevelName, PHQ_ITEMS, PHQ_IMPACT, phqItems, phqProfile,
-  TK_DIMS, TK_LETTER, TK_AXIS, TK_TYPES, TK_GRID, tkProfile, AKPD_BIDANG, akpdItems, akpdProfile, PR_ASPEK, PR_ITEMS, prProfile,
+  TK_DIMS, TK_LETTER, TK_AXIS, TK_TYPES, TK_GRID, tkProfile, AKPD_BIDANG, akpdItems, akpdProfile, PR_ASPEK, PR_OLD_ITEMS, prProfileOld,
 } from "./instruments.js";
 
-const pct = (n, d) => (d ? Math.round((n / d) * 100) : 0);
-const tbl = (head, rows) => `<div class="tblwrap"><table class="tbl"><thead><tr>${head.map((h) => `<th${h.num ? ' class="num"' : ""}>${esc(h.t ?? h)}</th>`).join("")}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c, i) => `<td${head[i]?.num ? ' class="num"' : ""}${head[i]?.wrap ? ' class="wrapok"' : ""}>${c && c.html ? c.html : esc(c)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
-const bars = (rows, max = 100, suffix = "%") => `<div class="bars">${rows.map(([name, v, label]) => `<div class="b"><span class="nm">${esc(name)}</span><span class="track"><i style="width:${max ? Math.min(100, (v / max) * 100) : 0}%"></i></span><span class="val">${esc(label ?? v + suffix)}</span></div>`).join("")}</div>`;
-const names = (rows) => rows.map((r) => esc(r.name)).join(", ");
-const prio = (title, cls, rows, note) => `<div class="card ${cls}"><p class="k">${esc(title)} <span class="muted">${rows.length}</span></p>${rows.length ? `<ul class="plist">${rows.map((r) => `<li><span>${esc(r.name)}</span>${r.note ? `<span class="muted small">${esc(r.note)}</span>` : ""}</li>`).join("")}</ul>` : `<p class="muted">-</p>`}${note ? `<p class="muted small" style="margin-top:.5rem">${esc(note)}</p>` : ""}</div>`;
-const tips = (title, list) => `<h2 class="sec-h">${title}</h2><ol class="strat">${list.map((x, i) => `<li class="${i < 3 ? "hi" : ""}"><span>${i + 1}</span>${x}</li>`).join("")}</ol>`;
-const caveat = (t) => `<div class="caveat">${t}</div>`;
-const unfilled = (rows) => (rows.some((r) => !r.filled) ? `<details class="card" style="margin-top:1rem"><summary>Belum mengisi (${rows.filter((r) => !r.filled).length})</summary><p class="muted" style="margin-top:.6rem">${names(rows.filter((r) => !r.filled))}</p></details>` : "");
-const join = (s, res, prof) => { const by = new Map(res.map((r) => [r.no, r.answers || {}])); return s.roster.map((m) => (by.has(m.no) ? { ...m, filled: true, a: by.get(m.no), p: prof(by.get(m.no)) } : { ...m, filled: false })); };
+export const pct = (n, d) => (d ? Math.round((n / d) * 100) : 0);
+export const tbl = (head, rows) => `<div class="tblwrap"><table class="tbl"><thead><tr>${head.map((h) => `<th${h.num ? ' class="num"' : ""}>${esc(h.t ?? h)}</th>`).join("")}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c, i) => `<td${head[i]?.num ? ' class="num"' : ""}${head[i]?.wrap ? ' class="wrapok"' : ""}>${c && c.html ? c.html : esc(c)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+export const bars = (rows, max = 100, suffix = "%") => `<div class="bars">${rows.map(([name, v, label]) => `<div class="b"><span class="nm">${esc(name)}</span><span class="track"><i style="width:${max ? Math.min(100, (v / max) * 100) : 0}%"></i></span><span class="val">${esc(label ?? v + suffix)}</span></div>`).join("")}</div>`;
+export const names = (rows) => rows.map((r) => esc(r.name)).join(", ");
+export const prio = (title, cls, rows, note) => `<div class="card ${cls}"><p class="k">${esc(title)} <span class="muted">${rows.length}</span></p>${rows.length ? `<ul class="plist">${rows.map((r) => `<li><span>${esc(r.name)}</span>${r.note ? `<span class="muted small">${esc(r.note)}</span>` : ""}</li>`).join("")}</ul>` : `<p class="muted">-</p>`}${note ? `<p class="muted small" style="margin-top:.5rem">${esc(note)}</p>` : ""}</div>`;
+export const tips = (title, list) => `<h2 class="sec-h">${title}</h2><ol class="strat">${list.map((x, i) => `<li class="${i < 3 ? "hi" : ""}"><span>${i + 1}</span>${x}</li>`).join("")}</ol>`;
+export const caveat = (t) => `<div class="caveat">${t}</div>`;
+export const unfilled = (rows) => (rows.some((r) => !r.filled) ? `<details class="card" style="margin-top:1rem"><summary>Belum mengisi (${rows.filter((r) => !r.filled).length})</summary><p class="muted" style="margin-top:.6rem">${names(rows.filter((r) => !r.filled))}</p></details>` : "");
+export const join = (s, res, prof) => { const by = new Map(res.map((r) => [r.no, r.answers || {}])); return s.roster.map((m) => (by.has(m.no) ? { ...m, filled: true, a: by.get(m.no), p: prof(by.get(m.no)) } : { ...m, filled: false })); };
 
 /* ---------------- Minat karier ---------------- */
 export function minatReport(s, res) {
@@ -297,11 +297,11 @@ export function akpdReport(s, res) {
 }
 
 /* ---------------- Deteksi perundungan ---------------- */
-export function amanReport(s, res) {
-  const rows = join(s, res, prProfile), done = rows.filter((r) => r.filled);
+export function amanReportOld(s, res) {
+  const rows = join(s, res, prProfileOld), done = rows.filter((r) => r.filled);
   const first = done.filter((r) => r.p.victim === "didahulukan"), victims = done.filter((r) => r.p.victim === "perlu"), doers = done.filter((r) => r.p.doer === "perlu");
   const safePct = pct(done.filter((r) => r.p.safe >= 3).length, done.length);
-  const forms = PR_ITEMS.map((it, i) => ({ ...it, i })).filter((it) => it.k === "korban").map((it) => ({ ...it, n: done.filter((r) => Number(r.a[it.i]) >= 2).length }));
+  const forms = PR_OLD_ITEMS.map((it, i) => ({ ...it, i })).filter((it) => it.k === "korban").map((it) => ({ ...it, n: done.filter((r) => Number(r.a[it.i]) >= 2).length }));
   const aspect = (k) => Math.round((done.reduce((t, r) => t + r.p[k], 0) / Math.max(1, done.length)) * 25);
   const body = `
     <h2 class="sec-h">Siapa diajak bicara lebih dulu</h2>

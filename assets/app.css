@@ -602,3 +602,10 @@ dialog.sheet::backdrop { background: rgba(12, 35, 64, .45); }
 .akb .track { height: 14px; background: var(--sky); border-radius: 999px; overflow: hidden; }
 .akb .track i { display: block; height: 100%; background: var(--sky-mid); border-radius: 999px; }
 .akb .track i.top { background: var(--blue-dark); }
+
+/* Hasil perundungan murid */
+.gb-step { background: var(--sky); border-radius: 24px; padding: 1.1rem 1.3rem; margin-top: 1.3rem; }
+.gb-step p.small { color: var(--blue-dark); font-size: .92rem; }
+.gb-step p + p { margin-top: .3rem; font-size: 1.15rem; }
+.gb-tips.pink { background: #fde2e2; }
+.gb-tips.pink h2 { font-size: 1.45rem; }
