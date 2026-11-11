@@ -5,6 +5,7 @@ import { GAYA_ITEMS } from "./data.js";
 import { JENJANG } from "./akpd-data.js";
 import { TK_ITEMS } from "./instruments.js";
 import { PR_ITEMS } from "./aman.js";
+import { svgToPngBlob } from "./sociogram.js";
 
 /* ---------------- Teks tetap per asesmen ---------------- */
 const nums = (list) => list.map((n) => n).join(", ");
@@ -62,6 +63,11 @@ const dLong = (t) => { const d = new Date(t); return `${d.getDate()} ${BLN[d.get
 const dShort = (t) => { const d = new Date(t); return `${d.getDate()} ${BLN[d.getMonth()].slice(0, 3)} ${d.getFullYear()}`; };
 const dIso = (t) => { const d = new Date(t); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 const tahunAjaran = (t) => { const d = new Date(t), y = d.getFullYear(); return d.getMonth() >= 6 ? `${y}/${y + 1} semester Ganjil` : `${y - 1}/${y} semester Genap`; };
+
+// Tanda tangan dan tanggal untuk semua dokumen resmi.
+export const docSign = (user) => ({ date: dLong(Date.now()), role: /\bBK\b/i.test(user.role || "") ? "Guru Bimbingan dan Konseling" : user.role || "Guru", name: user.name || "" });
+export const safeName = (x) => String(x).replace(/[&/\\:*?"<>|]/g, "").replace(/\s+/g, " ").trim();
+export { dLong, dShort, dIso, tahunAjaran };
 
 /* ---------------- Mengambil isi dari laporan dasbor ---------------- */
 const SKIP = "script,style,svg,canvas,dialog,button,.no-print,.eyebrow,.stk-legend";
@@ -157,48 +163,86 @@ export function buildDoc({ user, s, a, res, bodyHtml }) {
       ...S.notes.map((n) => ({ t: "p", text: `Catatan: ${n}`, italic: true })),
     ] },
   ].map((x, i) => ({ ...x, h: `${String.fromCharCode(65 + i)}. ${x.h}` }));
-  const role = /\bBK\b/i.test(user.role || "") ? "Guru Bimbingan dan Konseling" : user.role || "Guru";
   const meta = [["Kelas", s.className], ...(user.school ? [["Sekolah", user.school]] : []), ["Tahun ajaran", tahunAjaran(s.createdAt || now)], ["Waktu pelaksanaan", when], ["Partisipasi", `${res.length} dari ${s.roster.length} siswa (${pct}%)`]];
   const wide = Math.max(0, ...sections.flatMap((x) => x.blocks.filter((b) => b.t === "table").map((b) => (b.head || b.rows[0] || []).length))) > 9;
   return {
     file: `${(a.title || a.name).replace(/[&/\\:*?"<>|]/g, "")} ${s.className.replace(/[/\\:*?"<>|]/g, "")} ${dIso(now)}`.replace(/\s+/g, " "),
     title: `LAPORAN HASIL ASESMEN ${title}`, meta, sections, wide,
-    sign: { date: dLong(now), role, name: user.name || "" },
+    sign: docSign(user),
     footer: "Rahasia: hanya untuk guru dan pihak sekolah yang berwenang",
   };
 }
 
-/* ---------------- HTML (untuk PDF lewat dialog cetak) ---------------- */
+/* ---------------- Bentuk dokumen ----------------
+   m = { file, footer, wide, parts: [part] }, atau satu part langsung (laporan asesmen).
+   part = { title, meta: [[k, v]], lead: [blok], sections: [{ h, blocks }], sign, after: [{ h, blocks }] }
+   blok: p { text, italic, bold, note } · sub { text } · ol/ul { items } · checks { items: [{ done, text }] }
+         table { head, rows } (isi sel boleh memuat "\n") · img { svg, caption, cm } · slot { id } (khusus pratinjau). */
+const partsOf = (m) => m.parts || [m];
 const h = (x) => String(x ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-export function docHtml(m) {
-  const blk = (b) => {
-    if (b.t === "p") return `<p${b.italic ? ' class="it"' : b.note ? ' class="sm"' : ""}>${h(b.text)}</p>`;
-    if (b.t === "sub") return `<h3>${h(b.text)}</h3>`;
-    if (b.t === "ol" || b.t === "ul") return `<${b.t}>${b.items.map((i) => `<li>${h(i)}</li>`).join("")}</${b.t}>`;
-    const w = colW(b);
-    return `<table><colgroup>${w.map((x) => `<col style="width:${x}%">`).join("")}</colgroup>${b.head ? `<thead><tr>${b.head.map((c) => `<th>${h(c)}</th>`).join("")}</tr></thead>` : ""}<tbody>${b.rows.map((r) => `<tr>${r.map((c) => `<td>${h(c)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
-  };
-  return `<!doctype html><html lang="id"><head><meta charset="utf-8"><title>${h(m.file)}</title><style>
-@page{size:A4 ${m.wide ? "landscape" : "portrait"};margin:20mm 18mm 20mm;@bottom-left{content:"${m.footer}";font:italic 8pt "Times New Roman",serif;color:#444}@bottom-right{content:"Halaman " counter(page) " dari " counter(pages);font:italic 8pt "Times New Roman",serif;color:#444}}
+const hb = (x) => h(x).replace(/\n/g, "<br>");
+const E = (ed, path) => (ed ? ` contenteditable="true" spellcheck="false" data-path="${path}"` : "");
+
+function blockHtml(b, path, ed, slot) {
+  if (b.t === "p") { const c = [b.italic && "it", b.note && "sm", b.bold && "b"].filter(Boolean).join(" "); return `<p${c ? ` class="${c}"` : ""}${E(ed, path + ".text")}>${hb(b.text)}</p>`; }
+  if (b.t === "sub") return `<h3${E(ed, path + ".text")}>${h(b.text)}</h3>`;
+  if (b.t === "ol" || b.t === "ul") return `<${b.t}>${b.items.map((x, i) => `<li${E(ed, `${path}.items.${i}`)}>${hb(x)}</li>`).join("")}</${b.t}>`;
+  if (b.t === "checks") return `<ol class="checks">${b.items.map((x, i) => `<li>${ed ? `<input type="checkbox" data-path="${path}.items.${i}.done"${x.done ? " checked" : ""} aria-label="Tandai">` : `[${x.done ? "v" : "&nbsp;&nbsp;"}] `}<span${E(ed, `${path}.items.${i}.text`)}>${hb(x.text)}</span></li>`).join("")}</ol>`;
+  if (b.t === "img") return `<figure class="img"><div class="svg" style="max-width:${b.cm || 14}cm">${b.svg}</div>${b.caption ? `<figcaption>${h(b.caption)}</figcaption>` : ""}</figure>`;
+  if (b.t === "slot") return slot ? slot(b.id) : "";
+  if (b.t !== "table") return "";
+  const w = colW(b);
+  return `<table class="dt"><colgroup>${w.map((x) => `<col style="width:${x}%">`).join("")}</colgroup>${b.head ? `<thead><tr>${b.head.map((c) => `<th>${h(c)}</th>`).join("")}</tr></thead>` : ""}<tbody>${b.rows.map((r, ri) => `<tr>${r.map((c, ci) => `<td${E(ed, `${path}.rows.${ri}.${ci}`)}>${hb(c)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+}
+function partHtml(p, pi, ed, slot) {
+  const P = `p.${pi}`;
+  const secs = (list, key, brk) => (list || []).map((s, si) => `<h2${brk && si === 0 ? ' class="pb"' : ""}>${h(s.h)}</h2>${s.blocks.map((b, bi) => blockHtml(b, `${P}.${key}.${si}.blocks.${bi}`, ed, slot)).join("")}`).join("");
+  return `<h1>${h(p.title)}</h1>
+${p.meta?.length ? `<table class="meta">${p.meta.map(([k, v]) => `<tr><td>${h(k)}</td><td>: ${h(v)}</td></tr>`).join("")}</table>` : ""}
+${(p.lead || []).map((b, bi) => blockHtml(b, `${P}.lead.${bi}`, ed, slot)).join("")}
+${secs(p.sections, "sections")}
+${p.sign ? `<div class="sign"><p>${h(p.sign.date)}</p><p>${h(p.sign.role)}</p><p class="nm">${h(p.sign.name) || "&nbsp;"}</p><p>NIP.</p></div>` : ""}
+${secs(p.after, "after", true)}`;
+}
+const DOC_CSS = (m) => `
+@page{size:A4 ${m.wide ? "landscape" : "portrait"};margin:20mm 18mm 20mm;${m.footer ? `@bottom-left{content:"${m.footer}";font:italic 8pt "Times New Roman",serif;color:#444}` : ""}@bottom-right{content:"Halaman " counter(page) " dari " counter(pages);font:italic 8pt "Times New Roman",serif;color:#444}}
 *{box-sizing:border-box}body{font:11pt/1.5 "Times New Roman",Times,serif;color:#000;margin:0}
 h1{font-size:13pt;text-align:center;margin:0 0 6mm}h2{font-size:11.5pt;margin:6mm 0 2mm;break-after:avoid}h3{font-size:11pt;margin:4mm 0 1.5mm;break-after:avoid}
-p{margin:0 0 2.5mm;text-align:justify}p.it{font-style:italic}p.sm{font-size:10pt}ol,ul{margin:0 0 3mm;padding-left:7mm}li{margin:0 0 1mm;text-align:justify}
-.meta{border-collapse:collapse;margin-bottom:2mm;width:auto;table-layout:auto}.meta td{border:0;padding:0 3mm 0 0;font-size:11pt}
-table{border-collapse:collapse;width:100%;margin:1mm 0 4mm;table-layout:fixed;font-size:${m.wide ? "8" : "9.5"}pt;line-height:1.3}
-th,td{border:.6pt solid #000;padding:1.2mm 1.6mm;vertical-align:top;text-align:left;overflow-wrap:anywhere}th{background:#e6e6e6;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.pb{break-before:page}p{margin:0 0 2.5mm;text-align:justify}p.it{font-style:italic}p.sm{font-size:10pt}p.b{font-weight:bold}ol,ul{margin:0 0 3mm;padding-left:7mm}li{margin:0 0 1mm;text-align:justify}
+.meta{border-collapse:collapse;margin-bottom:4mm;width:auto;table-layout:auto}.meta td{border:0;padding:0 3mm 0 0;font-size:11pt}
+table.dt{border-collapse:collapse;width:100%;margin:1mm 0 4mm;table-layout:fixed;font-size:${m.wide ? "8" : "9.5"}pt;line-height:1.3}
+.dt th,.dt td{border:.6pt solid #000;padding:1.2mm 1.6mm;vertical-align:top;text-align:left;overflow-wrap:anywhere}.dt th{background:#e6e6e6;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 thead{display:table-header-group}tr{break-inside:avoid}
-.sign{margin:10mm 0 0 auto;width:75mm;break-inside:avoid}.sign p{margin:0;text-align:left}.sign .nm{margin-top:20mm;font-weight:bold;text-decoration:underline}
-</style></head><body>
-<h1>${h(m.title)}</h1>
-<table class="meta">${m.meta.map(([k, v]) => `<tr><td>${h(k)}</td><td>: ${h(v)}</td></tr>`).join("")}</table>
-${m.sections.map((s) => `<h2>${h(s.h)}</h2>${s.blocks.map(blk).join("")}`).join("")}
-<div class="sign"><p>${h(m.sign.date)}</p><p>${h(m.sign.role)}</p><p class="nm">${h(m.sign.name) || "&nbsp;"}</p><p>NIP.</p></div>
+figure.img{margin:2mm 0 4mm;text-align:center;break-inside:avoid}figure.img .svg{margin:0 auto}figure.img svg{width:100%;height:auto;display:block;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+figcaption{font-size:9pt;font-style:italic;margin-top:2mm;text-align:center}
+.sign{margin:10mm 0 0 auto;width:75mm;break-inside:avoid}.sign p{margin:0;text-align:left}.sign .nm{margin-top:20mm;font-weight:bold;text-decoration:underline}`;
+
+export function docHtml(m) {
+  return `<!doctype html><html lang="id"><head><meta charset="utf-8"><title>${h(m.file)}</title><style>${DOC_CSS(m)}</style></head><body>
+${partsOf(m).map((p, pi) => `<div class="${pi ? "pb" : ""}">${partHtml(p, pi, false)}</div>`).join("")}
 </body></html>`;
+}
+// Pratinjau di halaman: teks bisa diubah langsung (contenteditable), lalu dibaca kembali dengan syncPreview.
+export const previewHtml = (m, slot) => partsOf(m).map((p, pi) => `<div class="docprev">${partHtml(p, pi, true, slot)}</div>`).join("");
+const textOf = (el) => {
+  if (typeof el.innerText === "string") return el.innerText;
+  const c = el.cloneNode(true); c.querySelectorAll("br").forEach((b) => b.replaceWith("\n")); return c.textContent;
+};
+export function syncPreview(m, root) {
+  root.querySelectorAll("[data-path]").forEach((el) => {
+    const keys = el.dataset.path.split("."), last = keys.pop();
+    let o = partsOf(m)[Number(keys[1])];
+    for (const k of keys.slice(2)) o = o?.[/^\d+$/.test(k) ? Number(k) : k];
+    if (!o) return;
+    o[/^\d+$/.test(last) ? Number(last) : last] = el.type === "checkbox" ? el.checked : textOf(el).replace(/ /g, " ").replace(/\n{3,}/g, "\n\n").trim();
+  });
+  return m;
 }
 // Lebar kolom proporsional dengan panjang isi, supaya kolom "No" sempit dan kolom catatan lebar.
 function colW(b) {
   const n = (b.head || b.rows[0] || []).length || 1;
-  const w = Array.from({ length: n }, (_, i) => Math.min(40, Math.max(4, ...[b.head?.[i], ...b.rows.map((r) => r[i])].map((x) => String(x ?? "").length))));
+  const len = (x) => Math.max(...String(x ?? "").split("\n").map((l) => l.length));
+  const w = Array.from({ length: n }, (_, i) => Math.min(40, Math.max(4, ...[b.head?.[i], ...b.rows.map((r) => r[i])].map(len))));
   const tot = w.reduce((t, x) => t + x, 0);
   return w.map((x) => Math.round((x / tot) * 1000) / 10);
 }
@@ -206,32 +250,43 @@ function colW(b) {
 /* ---------------- Word (.docx tanpa pustaka) ---------------- */
 const X = (s) => String(s ?? "").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const run = (t, o = {}) => `<w:r><w:rPr>${o.b ? "<w:b/>" : ""}${o.i ? "<w:i/>" : ""}${o.sz ? `<w:sz w:val="${o.sz}"/><w:szCs w:val="${o.sz}"/>` : ""}${o.u ? '<w:u w:val="single"/>' : ""}</w:rPr><w:t xml:space="preserve">${X(t)}</w:t></w:r>`;
-const par = (runs, o = {}) => `<w:p><w:pPr>${o.keep ? "<w:keepNext/>" : ""}<w:spacing w:before="${o.before ?? 0}" w:after="${o.after ?? 100}"/>${o.ind ? `<w:ind ${o.ind}/>` : ""}${o.jc ? `<w:jc w:val="${o.jc}"/>` : ""}</w:pPr>${runs}</w:p>`;
+const par = (runs, o = {}) => `<w:p><w:pPr>${o.keep ? "<w:keepNext/>" : ""}${o.pb ? "<w:pageBreakBefore/>" : ""}<w:spacing w:before="${o.before ?? 0}" w:after="${o.after ?? 100}"/>${o.ind ? `<w:ind ${o.ind}/>` : ""}${o.jc ? `<w:jc w:val="${o.jc}"/>` : ""}</w:pPr>${runs}</w:p>`;
 const bdr = ["top", "left", "bottom", "right", "insideH", "insideV"].map((k) => `<w:${k} w:val="single" w:sz="4" w:space="0" w:color="000000"/>`).join("");
 
-function docxTable(b, W, wide) {
+function docxTable(b, W) {
   const cols = (b.head || b.rows[0] || []).length || 1, sz = cols > 9 ? 15 : cols > 6 ? 17 : 19;
   const w = colW(b).map((p) => Math.max(500, Math.round((p / 100) * W)));
-  const cell = (t, i, head) => `<w:tc><w:tcPr><w:tcW w:w="${w[i]}" w:type="dxa"/>${head ? '<w:shd w:val="clear" w:color="auto" w:fill="E6E6E6"/>' : ""}</w:tcPr>${par(run(t, { sz, b: head }), { after: 0 })}</w:tc>`;
+  const cell = (t, i, head) => `<w:tc><w:tcPr><w:tcW w:w="${w[i]}" w:type="dxa"/>${head ? '<w:shd w:val="clear" w:color="auto" w:fill="E6E6E6"/>' : ""}</w:tcPr>${String(t ?? "").split("\n").map((line) => par(run(line, { sz, b: head }), { after: 0 })).join("")}</w:tc>`;
   const row = (r, head) => `<w:tr><w:trPr><w:cantSplit/>${head ? "<w:tblHeader/>" : ""}</w:trPr>${Array.from({ length: cols }, (_, i) => cell(r[i] ?? "", i, head)).join("")}</w:tr>`;
   return `<w:tbl><w:tblPr><w:tblW w:w="${w.reduce((t, x) => t + x, 0)}" w:type="dxa"/><w:tblBorders>${bdr}</w:tblBorders><w:tblLayout w:type="fixed"/><w:tblCellMar><w:top w:w="40" w:type="dxa"/><w:left w:w="80" w:type="dxa"/><w:bottom w:w="40" w:type="dxa"/><w:right w:w="80" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>${w.map((x) => `<w:gridCol w:w="${x}"/>`).join("")}</w:tblGrid>${b.head ? row(b.head, true) : ""}${b.rows.map((r) => row(r, false)).join("")}</w:tbl>${par("", { after: 80 })}`;
 }
+const NS_PIC = 'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"';
+const drawing = (rid, n, cm) => { const e = Math.round(cm * 360000); return `<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${e}" cy="${e}"/><wp:docPr id="${n}" name="Gambar ${n}"/><wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="${n}" name="gambar${n}.png"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${rid}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${e}" cy="${e}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>`; };
 
-function docxBody(m) {
+function docxBody(m, images) {
   const W = m.wide ? 16838 - 2 * 1134 : 11906 - 2 * 1418, out = [];
-  out.push(par(run(m.title, { b: true, sz: 26 }), { jc: "center", after: 240 }));
-  m.meta.forEach(([k, v]) => out.push(`<w:p><w:pPr><w:tabs><w:tab w:val="left" w:pos="2400"/></w:tabs><w:spacing w:before="0" w:after="20"/></w:pPr>${run(k)}<w:r><w:tab/></w:r>${run(": " + v)}</w:p>`));
-  m.sections.forEach((s) => {
-    out.push(par(run(s.h, { b: true }), { before: 200, after: 80, keep: true }));
-    s.blocks.forEach((b) => {
-      if (b.t === "p") out.push(par(run(b.text, { i: b.italic, sz: b.note ? 20 : 0 }), { jc: b.note ? undefined : "both" }));
-      else if (b.t === "sub") out.push(par(run(b.text, { b: true }), { before: 100, after: 60, keep: true }));
-      else if (b.t === "ol" || b.t === "ul") b.items.forEach((it, i) => out.push(par(run(`${b.t === "ol" ? i + 1 + "." : "•"}\t${it}`), { ind: 'w:left="425" w:hanging="425"', after: 40, jc: "both" })));
-      else out.push(docxTable(b, W, m.wide));
-    });
-  });
+  const blk = (b) => {
+    if (b.t === "p") String(b.text ?? "").split("\n").forEach((line) => out.push(par(run(line, { i: b.italic, b: b.bold, sz: b.note ? 20 : 0 }), { jc: b.note ? undefined : "both" })));
+    else if (b.t === "sub") out.push(par(run(b.text, { b: true }), { before: 100, after: 60, keep: true }));
+    else if (b.t === "ol" || b.t === "ul") b.items.forEach((it, i) => out.push(par(run(`${b.t === "ol" ? i + 1 + "." : "•"}\t${it}`), { ind: 'w:left="425" w:hanging="425"', after: 40, jc: "both" })));
+    else if (b.t === "checks") b.items.forEach((it, i) => out.push(par(run(`${i + 1}.\t[${it.done ? "v" : "  "}] ${it.text}`), { ind: 'w:left="425" w:hanging="425"', after: 40, jc: "both" })));
+    else if (b.t === "img") {
+      const img = images.get(b);
+      out.push(img ? par(drawing(img.rid, img.n, b.cm || 14), { jc: "center", after: 60, keep: true }) : par(run("(Gambar tidak dapat dibuat di peramban ini; lihat versi PDF.)", { i: true, sz: 18 }), { jc: "center" }));
+      if (b.caption) out.push(par(run(b.caption, { i: true, sz: 18 }), { jc: "center", after: 160 }));
+    } else if (b.t === "table") out.push(docxTable(b, W));
+  };
   const ind = `w:left="${m.wide ? 9000 : 5200}"`;
-  out.push(par("", { after: 200 }), par(run(m.sign.date), { ind, after: 0 }), par(run(m.sign.role), { ind, after: 0 }), par("", { ind, after: 900 }), par(run(m.sign.name || " ", { b: true, u: true }), { ind, after: 0 }), par(run("NIP."), { ind }));
+  partsOf(m).forEach((p, pi) => {
+    out.push(par(run(p.title, { b: true, sz: 26 }), { jc: "center", after: 240, pb: pi > 0 }));
+    (p.meta || []).forEach(([k, v]) => out.push(`<w:p><w:pPr><w:tabs><w:tab w:val="left" w:pos="2400"/></w:tabs><w:spacing w:before="0" w:after="20"/></w:pPr>${run(k)}<w:r><w:tab/></w:r>${run(": " + v)}</w:p>`));
+    if (p.meta?.length) out.push(par("", { after: 80 }));
+    (p.lead || []).forEach(blk);
+    const secs = (list, brk) => (list || []).forEach((s, si) => { out.push(par(run(s.h, { b: true }), { before: 200, after: 80, keep: true, pb: brk && si === 0 })); s.blocks.forEach(blk); });
+    secs(p.sections);
+    if (p.sign) out.push(par("", { after: 200 }), par(run(p.sign.date), { ind, after: 0 }), par(run(p.sign.role), { ind, after: 0 }), par("", { ind, after: 900 }), par(run(p.sign.name || " ", { b: true, u: true }), { ind, after: 0 }), par(run("NIP."), { ind }));
+    secs(p.after, true);
+  });
   const sect = m.wide ? `<w:pgSz w:w="16838" w:h="11906" w:orient="landscape"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="567" w:footer="567" w:gutter="0"/>` : `<w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1418" w:right="1418" w:bottom="1304" w:left="1418" w:header="709" w:footer="567" w:gutter="0"/>`;
   return { xml: out.join("") + `<w:sectPr><w:footerReference w:type="default" r:id="rId2"/>${sect}</w:sectPr>`, W };
 }
@@ -239,20 +294,33 @@ function docxBody(m) {
 const NS = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
 const HEAD = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
 
-export function docxBlob(m) {
-  const { xml, W } = docxBody(m), enc = new TextEncoder();
+// Gambar SVG diubah menjadi PNG lewat kanvas peramban. Bila gagal, dokumen tetap dibuat tanpa gambar.
+async function svgPng(svg) {
+  const el = new DOMParser().parseFromString(svg, "image/svg+xml").documentElement;
+  const blob = await Promise.race([svgToPngBlob(el, 1200), new Promise((_, no) => setTimeout(() => no(new Error("waktu habis")), 8000))]);
+  if (!blob) throw new Error("gambar kosong");
+  return new Uint8Array(await blob.arrayBuffer());
+}
+
+export async function docxBlob(m) {
+  const imgs = partsOf(m).flatMap((p) => [...(p.lead || []), ...[...(p.sections || []), ...(p.after || [])].flatMap((s) => s.blocks)]).filter((b) => b.t === "img");
+  const images = new Map(), media = [];
+  for (const b of imgs) {
+    try { const data = await svgPng(b.svg), n = media.length + 1; media.push({ name: `word/media/gambar${n}.png`, data, rid: `rImg${n}` }); images.set(b, { rid: `rImg${n}`, n }); } catch { break; /* peramban tidak bisa menggambar: lanjut tanpa gambar */ }
+  }
+  const { xml, W } = docxBody(m, images), enc = new TextEncoder();
   const fsz = '<w:sz w:val="16"/><w:szCs w:val="16"/>';
   const fld = (ins) => `<w:fldSimple w:instr="${ins}"><w:r><w:rPr><w:i/>${fsz}</w:rPr><w:t>1</w:t></w:r></w:fldSimple>`;
   const fr = (t) => `<w:r><w:rPr><w:i/>${fsz}</w:rPr><w:t xml:space="preserve">${X(t)}</w:t></w:r>`;
   const files = [
-    ["[Content_Types].xml", `${HEAD}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/></Types>`],
+    ["[Content_Types].xml", `${HEAD}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/></Types>`],
     ["_rels/.rels", `${HEAD}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`],
-    ["word/_rels/document.xml.rels", `${HEAD}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/></Relationships>`],
+    ["word/_rels/document.xml.rels", `${HEAD}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>${media.map((x) => `<Relationship Id="${x.rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="${x.name.slice(5)}"/>`).join("")}</Relationships>`],
     ["word/styles.xml", `${HEAD}<w:styles ${NS}><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman" w:eastAsia="Times New Roman"/><w:sz w:val="22"/><w:szCs w:val="22"/><w:lang w:val="id-ID"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="100" w:line="276" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style></w:styles>`],
-    ["word/footer1.xml", `${HEAD}<w:ftr ${NS}><w:p><w:pPr><w:tabs><w:tab w:val="right" w:pos="${W}"/></w:tabs><w:spacing w:before="0" w:after="0"/></w:pPr>${fr(m.footer)}<w:r><w:tab/></w:r>${fr("Halaman ")}${fld("PAGE")}${fr(" dari ")}${fld("NUMPAGES")}</w:p></w:ftr>`],
-    ["word/document.xml", `${HEAD}<w:document ${NS}><w:body>${xml}</w:body></w:document>`],
+    ["word/footer1.xml", `${HEAD}<w:ftr ${NS}><w:p><w:pPr><w:tabs><w:tab w:val="right" w:pos="${W}"/></w:tabs><w:spacing w:before="0" w:after="0"/></w:pPr>${m.footer ? fr(m.footer) : ""}<w:r><w:tab/></w:r>${fr("Halaman ")}${fld("PAGE")}${fr(" dari ")}${fld("NUMPAGES")}</w:p></w:ftr>`],
+    ["word/document.xml", `${HEAD}<w:document ${NS} ${NS_PIC}><w:body>${xml}</w:body></w:document>`],
   ].map(([name, text]) => ({ name, data: enc.encode(text) }));
-  return zip(files);
+  return zip([...files, ...media]);
 }
 
 const crcT = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();

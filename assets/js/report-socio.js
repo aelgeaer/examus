@@ -1,68 +1,20 @@
 // Laporan sosiometri untuk guru.
 import { esc, $, $$, toast, firstName, download } from "./util.js";
-import { analyze, mountSociogram, describe, svgToPngBlob } from "./sociogram.js";
-import { SOCIO_REASONS, OTHER_REASON, areaOf } from "./socio-data.js";
+import { mountSociogram, describe, svgToPngBlob } from "./sociogram.js";
+import { areaOf } from "./socio-data.js";
+import { socioStats, dec2 } from "./socio-calc.js";
+import { socioDoc } from "./socio-doc.js";
+import { FOLLOWUPS, ICONS } from "./socio-followup.js";
 
 const tbl = (head, rows, cls = "") => `<div class="tblwrap"><table class="tbl ${cls}"><thead><tr>${head.map((h) => `<th${h.num ? ' class="num"' : ""}>${esc(h.t ?? h)}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody></table></div>`;
 const who = (r) => `${esc(r.name)} (No. ${r.no})`;
 const pct = (n, d) => (d ? Math.round((n / d) * 100) : 0);
 
-// Kelompok erat: tiga murid yang semuanya saling memilih.
-function triangles(an) {
-  const out = [], nos = an.rows.map((r) => r.no);
-  for (const [a, b] of an.mutual) for (const c of nos) if (c > b && an.isMutual(a, c) && an.isMutual(b, c)) out.push([a, b, c]);
-  return out;
-}
-
-// Rantai pilihan pertama yang tidak dibalas: mulai dari murid yang tidak dipilih pertama oleh siapa pun.
-function chains(an) {
-  const first = new Map(an.rows.filter((r) => r.picks.length).map((r) => [r.no, r.picks[0]]));
-  const firstPicked = new Set(first.values());
-  const out = [];
-  for (const r of an.rows) {
-    if (!first.has(r.no) || firstPicked.has(r.no)) continue;
-    const path = [r.no]; let cur = r.no;
-    while (first.has(cur)) {
-      const nx = first.get(cur);
-      if (path.includes(nx)) break;
-      path.push(nx);
-      if (an.isMutual(cur, nx)) break;
-      cur = nx;
-    }
-    if (path.length >= 3) out.push(path);
-  }
-  return out;
-}
-
-function category(r, an, neg) {
-  if (r.count === 0) return neg ? "Tidak ditolak" : "Belum dipilih";
-  if (neg) return r.index >= 0.25 || r === an.star ? "Banyak ditolak" : "Ditolak beberapa teman";
-  if (r === an.star || r.index >= 0.5) return "Sangat diterima";
-  if (r.index >= 0.25) return "Diterima";
-  return "Cukup diterima";
-}
-
 export function socioReport(s, res) {
-  const filled = new Set(res.map((r) => r.no));
-  const qs = s.config.questions || [];
-  const per = qs.map((q) => {
-    const picks = {}; res.forEach((r) => (picks[r.no] = r.answers?.[q.id] || []));
-    const an = analyze(s.roster, picks, filled);
-    const totalPicks = an.rows.reduce((t, r) => t + r.picks.length, 0);
-    const mutualPicks = an.mutual.length * 2;
-    // Alasan: dihitung dari semua pilihan untuk pertanyaan ini.
-    const counts = new Map((SOCIO_REASONS[areaOf(q)] || []).map((t) => [t, 0]));
-    let other = 0; const otherText = [];
-    res.forEach((r) => Object.values(r.answers?.reasons?.[q.id] || {}).forEach((list) => (list || []).forEach((t) => {
-      if (String(t).startsWith(OTHER_REASON)) { other++; const x = String(t).slice(OTHER_REASON.length + 2).trim(); if (x) otherText.push(x); }
-      else counts.set(t, (counts.get(t) || 0) + 1);
-    })));
-    return { q, an, neg: !!q.neg, totalPicks, mutualPicks, tri: triangles(an), ch: chains(an), counts, other, otherText };
-  });
+  const st = socioStats(s, res), per = st.per, qs = s.config.questions || [];
 
-  const section = ({ q, an, neg, totalPicks, mutualPicks, tri, ch, counts, other, otherText }, i) => {
+  const section = ({ q, an, neg, totalPicks, recip, tri, ch, counts, other, otherText }, i) => {
     const top = an.maxCount > 0 ? an.rows.filter((r) => r.count === an.maxCount) : [];
-    const recip = pct(mutualPicks, totalPicks);
     const least = [...an.rows].sort((a, b) => a.count - b.count || a.no - b.no).slice(0, 4);
     const verb = neg ? "ditolak" : "dipilih";
     const desc = [
@@ -118,9 +70,9 @@ export function socioReport(s, res) {
 
       <h2 class="sec-h">Indeks per murid</h2>
       ${tbl(["No", "Nama", "L/P", { t: neg ? "Ditolak" : "Dipilih", num: 1 }, { t: "Skor", num: 1 }, { t: "Indeks", num: 1 }, "Kategori"],
-        sorted.map((r) => `<tr><td>${r.no}</td><td>${esc(r.name)}${r.filled ? "" : ` <span class="muted small">· belum mengisi</span>`}</td><td>${r.g || "-"}</td><td class="num">${r.count}</td><td class="num">${r.score}</td><td class="num">${r.index.toFixed(2)}</td><td>${category(r, an, neg)}</td></tr>`))}
+        sorted.map((r) => `<tr><td>${r.no}</td><td>${esc(r.name)}${r.filled ? "" : ` <span class="muted small">· belum mengisi</span>`}</td><td>${r.g || "-"}</td><td class="num">${r.count}</td><td class="num">${r.score}</td><td class="num">${dec2(r.idx)}</td><td>${r.cat}</td></tr>`))}
       <details class="card" style="margin-top:1rem"><summary>Cara menghitung Dipilih, Skor, Indeks, dan Kategori</summary>
-        <ul class="tips" style="margin-top:.6rem"><li><b style="font-weight:500">${neg ? "Ditolak" : "Dipilih"}</b>: berapa teman yang menyebut murid ini.</li><li><b style="font-weight:500">Skor</b>: pilihan pertama bernilai 3, kedua 2, ketiga dan seterusnya 1.</li><li><b style="font-weight:500">Indeks</b>: ${neg ? "ditolak" : "dipilih"} dibagi jumlah murid lain di kelas (${an.N - 1}).</li><li><b style="font-weight:500">Kategori</b>: ${neg ? "banyak ditolak bila indeks 0,25 atau lebih; ditolak beberapa teman bila di bawahnya; tidak ditolak bila tidak disebut." : "sangat diterima bila indeks 0,50 atau lebih (atau paling banyak dipilih); diterima 0,25 sampai 0,49; cukup diterima di bawah 0,25; belum dipilih bila tidak ada yang memilih."}</li></ul></details>
+        <ul class="tips" style="margin-top:.6rem"><li><b style="font-weight:500">${neg ? "Ditolak" : "Dipilih"}</b>: berapa teman yang menyebut murid ini.</li><li><b style="font-weight:500">Skor</b>: pilihan pertama bernilai 3, kedua 2, ketiga dan seterusnya 1.</li><li><b style="font-weight:500">Indeks</b>: ${neg ? "ditolak" : "dipilih"} dibagi jumlah teman yang sudah mengisi (tanpa murid itu sendiri). Bila semua mengisi, sama dengan Indeks Status Pemilihan = D / (N - 1).</li><li><b style="font-weight:500">Kategori</b>: ${neg ? "banyak ditolak bila indeks 0,25 atau lebih; ditolak beberapa teman bila di bawahnya; tidak ditolak bila tidak disebut." : "skor dibandingkan dengan teman sekelas lewat skor baku z = (skor - rata-rata kelas) / simpangan baku. Sangat diterima z 1 ke atas; diterima 0,5 sampai di bawah 1; sedang di antara -0,5 dan 0,5; kurang diterima -0,5 ke bawah; belum dipilih bila tidak ada yang memilih. Batas ini patokan Examus; literatur BK tidak punya tabel baku."}</li></ul></details>
       <details class="card" style="margin-top:.6rem"><summary>Matriks pilihan (tabulasi)</summary>
         <p class="muted small" style="margin-top:.6rem">Baris = murid yang memilih, kolom = nomor murid yang dipilih, angka = urutan pilihan.</p>
         <div class="tblwrap" style="margin-top:.5rem"><table class="tbl matrix"><thead><tr><th>Memilih ↓ / Dipilih →</th>${others.map((m) => `<th class="num">${m.no}</th>`).join("")}</tr></thead><tbody>
@@ -136,13 +88,18 @@ export function socioReport(s, res) {
   const body = `
     ${qs.length > 1 ? `<p class="flabel no-print" style="margin-top:1.6rem">Lihat hasil untuk pertanyaan nomor</p>
     <div class="seg qnums no-print" role="tablist" aria-label="Nomor pertanyaan">${qs.map((_, i) => `<label><input type="radio" name="qn" value="${i}"${i ? "" : " checked"}><span>${i + 1}</span></label>`).join("")}</div>` : ""}
-    ${per.map(section).join("")}`;
+    ${per.map(section).join("")}
+
+    <h2 class="sec-h no-print">Buat dokumen tindak lanjut</h2>
+    <p class="muted no-print">Dokumen siap pakai dari hasil ini, bisa diubah sebelum diunduh atau dicetak.</p>
+    <div class="fu-cards no-print">${Object.entries(FOLLOWUPS).map(([k, f]) => `<div class="fu-card"><div class="fu-ico">${ICONS[k]}</div><p class="t">${esc(f.title)}</p><p>${esc(f.desc)}</p>${f.note ? `<p class="muted small">${esc(f.note)}</p>` : ""}<a class="btn sm" href="#/sesi/${s.id}/tindak/${k}">Buat</a></div>`).join("")}</div>`;
 
   return {
     body,
+    doc: (user) => socioDoc(st, user),
     csv() {
       const rows = [["Pertanyaan", "Bidang", "No", "Nama", "L/P", "Dipilih", "Skor", "Indeks", "Kategori", "Pilihan 1", "Pilihan 2", "Pilihan 3", "Pilihan 4", "Pilihan 5"]];
-      per.forEach(({ q, an, neg }, i) => an.rows.forEach((r) => rows.push([`${i + 1}. ${q.text}`, areaOf(q), r.no, r.name, r.g, r.count, r.score, r.index.toFixed(2).replace(".", ","), category(r, an, neg), ...[0, 1, 2, 3, 4].map((k) => (r.picks[k] ? an.byNo.get(r.picks[k]).name : ""))])));
+      per.forEach(({ q, an, neg }, i) => an.rows.forEach((r) => rows.push([`${i + 1}. ${q.text}`, areaOf(q), r.no, r.name, r.g, r.count, r.score, dec2(r.idx), r.cat, ...[0, 1, 2, 3, 4].map((k) => (r.picks[k] ? an.byNo.get(r.picks[k]).name : ""))])));
       return rows;
     },
     mount(root) {

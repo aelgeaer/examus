@@ -104,7 +104,7 @@ export async function report({ user, params }) {
   const a = getAssessment(s.type);
   const res = await store.listResponses(s.id);
   if (!res.length) return { html: `${header(user, "dasbor")}<main class="page"><div class="narrow"><a class="back" href="#/sesi/${s.id}">← ${esc(s.className)}</a><h1 class="page-title">Belum ada jawaban</h1><p class="page-sub">Laporan muncul setelah setidaknya satu murid mengisi.</p></div></main>` };
-  const r = BUILD[s.type](s, res), formal = hasDoc(s.type);
+  const r = BUILD[s.type](s, res), formal = hasDoc(s.type) || !!r.doc;
   const today = fmtDate(Date.now()).replace(/^\S+,\s*/, "");
   const html = `${header(user, "dasbor")}<main class="page"><div class="wrap">
     <a class="back no-print" href="#/sesi/${s.id}">← Sesi</a>
@@ -125,10 +125,10 @@ export async function report({ user, params }) {
     mount(root) {
       r.mount && r.mount(root);
       $("#rp-print", root)?.addEventListener("click", () => window.print());
-      const doc = () => buildDoc({ user, s, a, res, bodyHtml: r.body });
-      const safe = (fn) => () => { try { fn(); } catch (ex) { console.error(ex); toast("Laporan belum bisa dibuat: " + ex.message); } };
-      $("#rp-docx", root)?.addEventListener("click", safe(() => { const m = doc(); saveBlob(m.file + ".docx", docxBlob(m)); }));
-      $("#rp-pdf", root)?.addEventListener("click", safe(() => printDoc(doc())));
+      const doc = async () => (r.doc ? r.doc(user) : buildDoc({ user, s, a, res, bodyHtml: r.body }));
+      const safe = (fn) => async (e) => { const b = e?.currentTarget; if (b) b.disabled = true; try { await fn(); } catch (ex) { console.error(ex); toast("Laporan belum bisa dibuat: " + ex.message); } if (b) b.disabled = false; };
+      $("#rp-docx", root)?.addEventListener("click", safe(async () => { const m = await doc(); saveBlob(m.file + ".docx", await docxBlob(m)); }));
+      $("#rp-pdf", root)?.addEventListener("click", safe(async () => printDoc(await doc())));
       $("#rp-csv", root).addEventListener("click", () => download(`examus-${a.id}-${s.className}.csv`.replace(/\s+/g, "-").toLowerCase(), toCSV(r.csv()), "text/csv"));
     },
   };

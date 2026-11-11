@@ -680,3 +680,49 @@ ul.who p.small { color: var(--ink-2); margin-top: .25rem; line-height: 1.45; }
   .akrow { grid-template-columns: 5em 1fr; } .akrow .val { grid-column: 2; }
   .nd { grid-template-columns: 2em 1fr 3em; } .nd .track { grid-column: 2 / -1; }
 }
+
+/* Dokumen tindak lanjut Sosiometri */
+.fu-ico svg { width: 44px; height: 44px; display: block; }
+.fu-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; margin-top: 1rem; }
+.fu-card { background: #fff; border-radius: var(--r-m); padding: 1.3rem; display: flex; flex-direction: column; gap: .55rem; }
+.fu-card .t { font-weight: 600; margin-top: .3rem; }
+.fu-card .btn { align-self: flex-start; margin-top: auto; }
+.fu-set { margin-top: 1.6rem; }
+.fu-list { display: grid; gap: .6rem; margin-top: 1.2rem; }
+.fu-item { background: #fff; border-radius: var(--r-m); padding: .2rem 1.1rem 1rem; }
+.fu-item > summary { display: flex; justify-content: space-between; gap: 1rem; padding: .9rem 0 .2rem; cursor: pointer; font-weight: 500; text-decoration: underline; }
+.docprev { background: #fff; border-radius: var(--r-m); padding: 1.6rem 1.5rem; margin-top: 1rem; font-family: "Times New Roman", Times, serif; font-size: 1.02rem; line-height: 1.55; color: #111; box-shadow: 0 1px 0 rgba(12,35,64,.06); }
+.fu-item .docprev { padding: 1rem 0 0; box-shadow: none; }
+.docprev h1 { font-size: 1.12rem; text-align: center; margin: 0 0 1rem; }
+.docprev h2 { font-size: 1.02rem; margin: 1.2rem 0 .4rem; }
+.docprev h3 { font-size: 1rem; margin: .9rem 0 .3rem; }
+.docprev p { margin: 0 0 .55rem; }
+.docprev p.it { font-style: italic; } .docprev p.sm { font-size: .92rem; } .docprev p.b { font-weight: 700; }
+.docprev ol, .docprev ul { margin: 0 0 .7rem; padding-left: 1.4rem; }
+.docprev li { margin-bottom: .25rem; }
+.docprev ol.checks { list-style: none; padding-left: 0; }
+.docprev ol.checks li { display: flex; gap: .55rem; align-items: flex-start; }
+.docprev ol.checks input { width: 18px; height: 18px; margin-top: .2rem; flex: none; accent-color: var(--blue); }
+.docprev .meta { border-collapse: collapse; margin-bottom: .9rem; }
+.docprev .meta td { padding: 0 .8rem 0 0; vertical-align: top; }
+.docprev table.dt { border-collapse: collapse; width: 100%; margin: .3rem 0 .9rem; font-size: .9rem; table-layout: fixed; }
+.docprev .dt th, .docprev .dt td { border: 1px solid #333; padding: .3rem .45rem; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.docprev .dt th { background: #ececec; }
+.docprev .dt td:empty::after { content: "..."; color: #aaa; }
+.docprev [contenteditable]:hover { background: #fffbe6; }
+.docprev [contenteditable]:focus { outline: 2px solid var(--sky); background: #fffbe6; }
+.docprev figure.img { margin: .5rem 0 1rem; text-align: center; }
+.docprev figure.img .svg { margin: 0 auto; }
+.docprev figure.img svg { width: 100%; height: auto; }
+.docprev figcaption { font-size: .85rem; font-style: italic; }
+.docprev .sign { width: 15rem; margin: 1.6rem 0 0 auto; }
+.docprev .sign p { margin: 0; } .docprev .sign .nm { margin-top: 3.2rem; font-weight: 700; text-decoration: underline; }
+.fu-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .7rem; margin: .4rem 0 1rem; font-family: Onest, system-ui, sans-serif; }
+.fu-grp { background: var(--sky); border-radius: 14px; padding: .9rem 1rem; }
+.fu-grp .gh { font-weight: 600; margin-bottom: .3rem; }
+.fu-grp ul { list-style: none; padding: 0; margin: 0 0 .4rem; }
+.fu-grp li { display: grid; grid-template-columns: 1.6em 1fr auto; gap: .4rem; align-items: center; padding: .3rem 0; border-bottom: 1px solid rgba(12,35,64,.08); }
+.fu-grp .no { color: var(--ink-2); font-size: .85rem; }
+.fu-grp .nm small { display: block; color: var(--ink-2); font-size: .78rem; line-height: 1.3; }
+.fu-grp select { font: inherit; font-size: .8rem; border: 0; border-radius: 999px; padding: .25rem .5rem; background: #fff; max-width: 9.5rem; }
+@media (max-width: 640px) { .fu-cards, .fu-groups { grid-template-columns: 1fr; } .docprev { padding: 1.1rem 1rem; } }
