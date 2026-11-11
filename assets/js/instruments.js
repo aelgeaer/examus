@@ -23,10 +23,11 @@ const MINAT5 = [{ v: 4, t: "Sangat suka" }, { v: 3, t: "Suka" }, { v: 2, t: "Rag
 export const RIASEC_KEYS = ["R", "I", "A", "S", "E", "C"];
 export const RIASEC_LABEL = { R: "Realistik", I: "Investigatif", A: "Artistik", S: "Sosial", E: "Wirausaha", C: "Konvensional" };
 // Penilaian ala Holland: skor mentah tiap tipe = jumlah nilai kegiatan tipe itu (8 kegiatan x 0-4 = 0-32).
-// Kode = tiga tipe dengan skor tertinggi. Diferensiasi = skor tertinggi dikurangi terendah; bila kurang
-// dari 25% rentang (8 poin), minat "belum terbedakan". Bila skor tertinggi di bawah 50% (16 poin, rata-rata
-// "ragu-ragu"), minat "rendah". Keduanya tidak diberi kode. Selisih 4 poin atau kurang di antara dua tipe
-// masih dalam batas kesalahan ukur, jadi urutannya dianggap setara. Sesi lama memakai skala 0-2.
+// Kode = tiga tipe dengan skor tertinggi, selalu dilaporkan seperti praktik Holland baku. Bila profil datar
+// (selisih tertinggi-terendah kurang dari 25% rentang) atau rendah (skor tertinggi di bawah 50% rentang),
+// kode ditandai "sementara" dan perlu dikonfirmasi lewat wawancara; batas 25% dan 50% adalah patokan Examus,
+// bukan norma baku. Jawaban yang semuanya sama tidak diberi kode. Selisih 12,5% rentang (4 poin) atau
+// kurang di antara dua tipe masih dalam batas kesalahan ukur, jadi urutannya dianggap setara. Sesi lama memakai skala 0-2.
 export function minatProfile(answers, cfg = {}) {
   const max = cfg.scale === 5 ? 4 : 2, raw = {}, n = {};
   RIASEC_KEYS.forEach((k) => { raw[k] = 0; n[k] = 0; });
@@ -38,10 +39,11 @@ export function minatProfile(answers, cfg = {}) {
   const flat = diff < 25, low = pct[order[0]] < 50;
   const vals = answers ? MINAT_ITEMS.map((_, i) => answers[i]).filter((v) => v !== undefined) : [];
   const same = vals.length > 10 && vals.every((v) => v === vals[0]);
-  const code = flat || low ? "" : order.slice(0, 3).join("");
+  const code = same ? "" : order.slice(0, 3).join("");
+  const provisional = !!code && (flat || low);
   const tied = !code ? [] : [0, 1, 2].filter((i) => pct[order[i]] - pct[order[i + 1]] <= 12.5).map((i) => order[i] + order[i + 1]);
-  const note = same ? "jawaban semuanya sama" : low ? "minat rendah" : flat ? "minat belum terbedakan" : "";
-  return { raw, pct, order, code, top: code ? order[0] : null, flat, low, same, diff, tied, note, max: range };
+  const note = same ? "jawaban semuanya sama" : low ? "minat rendah" : flat ? "profil datar (belum terbedakan)" : "";
+  return { raw, pct, order, code, provisional, top: code && !provisional ? order[0] : null, flat, low, same, diff, tied, note, max: range };
 }
 
 /* ---------------- Kekuatan & kesulitan ---------------- */
@@ -263,14 +265,15 @@ export const INSTR = {
       const p = minatProfile(a, cfg);
       const vals = Object.fromEntries(RIASEC_KEYS.map((k) => [k, p.pct[k] / 100]));
       const think = `<div class="gb-tips"><h2>Coba pikirkan</h2><ul><li>Dari semua kegiatan tadi, mana yang paling ingin kamu coba sungguhan?</li><li>Siapa orang di sekitarmu yang pekerjaannya cocok dengan minatmu? Coba tanyakan pengalamannya.</li><li>Mapel pilihan atau jurusan apa yang ingin kamu cari tahu lebih jauh?</li></ul></div>`;
-      const head = p.code
-        ? `<h1 class="center">${p.code}</h1><p class="lead center">Minat terkuatmu: ${p.order.slice(0, 3).map((k) => RIASEC_LABEL[k].toLowerCase()).join(", ")}.</p>
-           ${p.order.slice(0, 3).map((k) => `<div class="gb-tips"><h2>${RIASEC_LABEL[k]} (${k})</h2><p class="muted" style="margin-top:.3rem">${esc(RIASEC[k].hint)}</p><ul><li>Mapel: ${RIASEC_EX[k].mapel}</li><li>Jurusan: ${RIASEC_EX[k].jurusan}</li><li>Pekerjaan: ${RIASEC_EX[k].kerja}</li></ul></div>`).join("")}`
+      const tipsFor = (ks) => ks.map((k) => `<div class="gb-tips"><h2>${RIASEC_LABEL[k]} (${k})</h2><p class="muted" style="margin-top:.3rem">${esc(RIASEC[k].hint)}</p><ul><li>Mapel: ${RIASEC_EX[k].mapel}</li><li>Jurusan: ${RIASEC_EX[k].jurusan}</li><li>Pekerjaan: ${RIASEC_EX[k].kerja}</li></ul></div>`).join("");
+      const head = p.code && !p.provisional
+        ? `<h1 class="center">${p.code}</h1><p class="lead center">Minat terkuatmu: ${p.order.slice(0, 3).map((k) => RIASEC_LABEL[k].toLowerCase()).join(", ")}.</p>${tipsFor(p.order.slice(0, 3))}`
         : p.low
           ? `<h1 class="center">Minatmu belum terlihat jelas</h1><p class="lead center">Belum banyak kegiatan yang kamu sukai di daftar tadi. Itu wajar, mungkin kamu belum sempat mencobanya. Cobalah kegiatan baru di sekolah atau di rumah, nanti minatmu akan lebih terlihat.</p>`
-          : `<h1 class="center">Minatmu luas</h1><p class="lead center">Kamu menyukai banyak jenis kegiatan hampir sama besarnya, jadi belum ada satu yang paling menonjol. Itu wajar di usiamu. Cobalah banyak hal, nanti minat yang paling kuat akan terlihat.</p>`;
+          : `<h1 class="center">Minatmu luas</h1><p class="lead center">Kamu menyukai banyak jenis kegiatan hampir sama besarnya, jadi belum ada satu yang paling menonjol. Itu wajar di usiamu. Cobalah banyak hal, nanti minat yang paling kuat akan terlihat.</p>
+            ${p.code ? `<div class="gb-tips"><h2>Sedikit lebih tinggi</h2><p style="margin-top:.4rem">Bidang yang skornya sedikit lebih tinggi: <b style="font-weight:600">${p.order.slice(0, 3).map((k) => RIASEC_LABEL[k].toLowerCase()).join(", ")}</b>. Ini kode sementara (${p.code}), karena skor semua bidangmu hampir sama. Gunakan sebagai awal mencoba, bukan kesimpulan.</p></div>${tipsFor(p.order.slice(0, 3))}` : ""}`;
       return `<p class="gb-eyebrow">Hasil minat kariermu</p>
-        <div class="radar-wrap">${radar(vals, RIASEC_KEYS, RIASEC_LABEL, { bold: p.code ? p.order.slice(0, 3) : [] })}</div>
+        <div class="radar-wrap">${radar(vals, RIASEC_KEYS, RIASEC_LABEL, { bold: p.code && !p.low ? p.order.slice(0, 3) : [] })}</div>
         ${head}${think}
         <div class="caveat" style="margin-top:1rem">Ini gambaran minatmu saat ini, bukan ukuran kemampuan dan bukan keputusan akhir. Minat bisa berubah seiring pengalaman, dan semua pekerjaan bisa dijalani laki-laki maupun perempuan. Ceritakan hasil ini kepada orang tua dan gurumu, lalu coba kegiatan yang berkaitan, ${esc(name)}!</div>`;
     },

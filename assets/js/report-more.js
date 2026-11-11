@@ -25,8 +25,9 @@ export function minatReport(s, res) {
   const avgPct = Object.fromEntries(K.map((k) => [k, done.length ? done.reduce((t, r) => t + r.p.pct[k], 0) / done.length : 0]));
   const avgRaw = Object.fromEntries(K.map((k) => [k, done.length ? done.reduce((t, r) => t + r.p.raw[k], 0) / done.length : 0]));
   const order = [...K].sort((a, b) => avgPct[b] - avgPct[a]);
-  const coded = done.filter((r) => r.p.code), talk = done.filter((r) => r.p.note);
-  const by = Object.fromEntries(K.map((k) => [k, coded.filter((r) => r.p.top === k)]));
+  const coded = done.filter((r) => r.p.code && !r.p.provisional), talk = done.filter((r) => r.p.note);
+  const by = Object.fromEntries(K.map((k) => [k, coded.filter((r) => r.p.order[0] === k)]));
+  const showCode = (p) => (p.code ? p.code + (p.provisional ? "*" : "") : "—");
   const fmt = (x) => (Math.round(x * 10) / 10).toString().replace(".", ",");
   const maxRaw = newScale ? 32 : 6;
   const nameBtn = (r, note) => `<button type="button" class="linkname" data-no="${r.no}">${esc(r.name)}</button>${note ? `<span class="muted small">${esc(note)}</span>` : ""}`;
@@ -40,12 +41,12 @@ export function minatReport(s, res) {
 
     <h2 class="sec-h">Perlu diajak bicara (${talk.length})</h2>
     <p class="muted">Ajak bicara secara pribadi, tanpa menghakimi. Minat rendah bisa berarti belum punya pengalaman, belum mengenal pilihan, kurang serius mengisi, atau sedang ada masalah (suasana hati, keluarga, sekolah). Minat yang belum terbedakan wajar di SMP: tawarkan pengalaman baru dan ulangi angket 6 sampai 12 bulan lagi.</p>
-    ${talk.length ? `<ul class="talk">${talk.map((r) => `<li>${nameBtn(r, r.p.note)}</li>`).join("")}</ul>` : `<div class="card" style="margin-top:.6rem"><p class="muted">Tidak ada.</p></div>`}
+    ${talk.length ? `<ul class="talk">${talk.map((r) => `<li>${nameBtn(r, [r.p.note, r.p.code ? `kode sementara ${r.p.code}` : ""].filter(Boolean).join("; "))}</li>`).join("")}</ul>` : `<div class="card" style="margin-top:.6rem"><p class="muted">Tidak ada.</p></div>`}
 
     <h2 class="sec-h">Murid per minat utama</h2>
     <p class="muted">Dikelompokkan menurut huruf pertama kode. Ketuk nama untuk melihat kartu murid.</p>
     <div class="ggroups g3" style="margin-top:.8rem">${K.filter((k) => by[k].length).map((k) => `<div class="card"><p class="gh">${RIASEC_LABEL[k]} (${k}) <span class="muted">${by[k].length}</span></p><ul>${by[k].map((r) => `<li>${nameBtn(r, r.p.code)}</li>`).join("")}</ul></div>`).join("")}
-      ${talk.length ? `<div class="card"><p class="gh">Belum terbedakan atau rendah <span class="muted">${talk.length}</span></p><ul>${talk.map((r) => `<li>${nameBtn(r)}</li>`).join("")}</ul></div>` : ""}
+      ${talk.length ? `<div class="card"><p class="gh">Kode sementara <span class="muted">${talk.length}</span></p><p class="muted small" style="margin-top:.3rem">Profil datar atau rendah. Dikonfirmasi lewat wawancara.</p><ul>${talk.map((r) => `<li>${nameBtn(r, r.p.code ? r.p.code + "*" : "")}</li>`).join("")}</ul></div>` : ""}
       ${!done.length ? `<div class="card"><p class="muted">Belum ada yang mengisi.</p></div>` : ""}</div>
 
     <h2 class="sec-h">Arti enam bidang</h2>
@@ -53,14 +54,21 @@ export function minatReport(s, res) {
 
     <h2 class="sec-h">Skor per murid</h2>
     ${tbl(["No", "Nama", "L/P", ...K.map((k) => ({ t: k, num: 1 })), "Kode", "Catatan"], rows.map((r) => (r.filled
-      ? [r.no, { html: nameBtn(r) }, r.g || "-", ...K.map((k) => r.p.raw[k]), r.p.code || "—", [r.p.note, r.p.tied.length ? `urutan ${r.p.tied.join(", ")} setara` : ""].filter(Boolean).join("; ") || "-"]
+      ? [r.no, { html: nameBtn(r) }, r.g || "-", ...K.map((k) => r.p.raw[k]), showCode(r.p), [r.p.note, r.p.provisional ? "kode sementara" : "", r.p.tied.length ? `urutan ${r.p.tied.join(", ")} setara` : ""].filter(Boolean).join("; ") || "-"]
       : [r.no, r.name, r.g || "-", ...K.map(() => "-"), "-", "Belum mengisi"])))}
-    <p class="muted small" style="margin-top:.5rem">${newScale
-      ? "Skor tiap tipe = jumlah nilai 8 kegiatan (sangat tidak suka 0 sampai sangat suka 4), jadi 0-32."
-      : "Sesi lama: skor tiap tipe = jumlah nilai 3 kegiatan (tidak tertarik 0 sampai tertarik 2), jadi 0-6."}
-      Kode = tiga tipe dengan skor tertinggi; selisih 4 poin (12,5%) atau kurang masih dalam batas kesalahan ukur, jadi urutannya dianggap setara.
-      "Belum terbedakan": skor tertinggi dan terendah selisih kurang dari 25% rentang. "Minat rendah": skor tertinggi di bawah 50% rentang, artinya tidak ada bidang yang rata-rata dinilai "ragu-ragu" atau lebih. Keduanya tidak diberi kode.</p>
+    <p class="muted small" style="margin-top:.5rem">* = kode sementara (lihat Keterangan istilah di bawah).</p>
     ${unfilled(rows)}
+    <h2 class="sec-h">Keterangan istilah</h2>
+    <dl class="gloss">
+      <dt>Skor mentah</dt><dd>Jumlah nilai semua kegiatan satu bidang. ${newScale ? "Tiap bidang punya 8 kegiatan, nilainya sangat tidak suka 0 sampai sangat suka 4, jadi skornya 0 sampai 32." : "Sesi lama: tiap bidang punya 3 kegiatan, nilainya tidak tertarik 0 sampai tertarik 2, jadi skornya 0 sampai 6."} Persen pada grafik = skor mentah dibagi skor tertinggi yang mungkin.</dd>
+      <dt>Kode minat (kode Holland)</dt><dd>Tiga huruf bidang dengan skor tertinggi, diurutkan dari yang paling tinggi. Contoh: SAE berarti Sosial paling tinggi, lalu Artistik, lalu Wirausaha. Satu atau dua huruf pertama paling bermakna; huruf ketiga paling lemah.</dd>
+      <dt>Urutan setara</dt><dd>Dua bidang yang skornya selisih 12,5% rentang (4 poin) atau kurang. Perbedaan sekecil itu masih dalam batas kesalahan ukur, jadi urutannya boleh ditukar.</dd>
+      <dt>Profil datar (belum terbedakan)</dt><dd>Skor tertinggi dan terendah selisih kurang dari 25% rentang (kurang dari 8 poin), sehingga keenam bidang hampir sama tinggi. Penyebabnya bisa murid memang berminat luas, menjawab "suka" untuk hampir semua kegiatan, atau belum mengenal pilihan. Batas 25% adalah patokan Examus, bukan norma baku.</dd>
+      <dt>Minat rendah</dt><dd>Skor tertinggi di bawah 50% rentang (di bawah 16 poin), artinya tidak ada bidang yang rata-rata dinilai "ragu-ragu" atau lebih. Bisa berarti murid belum banyak pengalaman, kurang serius mengisi, atau sedang ada masalah lain. Batas 50% adalah patokan Examus.</dd>
+      <dt>Kode sementara (*)</dt><dd>Kode tetap dihitung dari skor tertinggi, tetapi karena profilnya datar atau rendah, urutannya kurang kokoh. Pakai sebagai bahan wawancara, jangan sebagai kesimpulan. Jawaban yang semuanya sama tidak diberi kode sama sekali.</dd>
+      <dt>Perlu diajak bicara</dt><dd>Murid dengan profil datar, minat rendah, atau jawaban semuanya sama. Ini penanda untuk ditemui secara pribadi, bukan penilaian tentang murid.</dd>
+      <dt>Rata-rata kelas</dt><dd>Rata-rata skor mentah semua murid yang sudah mengisi, per bidang. Hanya membantu merancang bimbingan klasikal; jangan dipakai untuk menilai murid perorangan.</dd>
+    </dl>
     ${tips("Tindak lanjut untuk kelas ini", [
       `Adakan bimbingan klasikal tentang enam tipe minat, lalu minta tiap murid mencari tahu satu pekerjaan dari kodenya.`,
       `Undang alumni atau orang tua dengan pekerjaan yang beragam, terutama dari bidang ${RIASEC_LABEL[order[0]].toLowerCase()} dan ${RIASEC_LABEL[order[1]].toLowerCase()}.`,
@@ -73,7 +81,7 @@ export function minatReport(s, res) {
     <dialog class="sheet" id="mk-card"></dialog></div>`;
   return {
     body,
-    csv: () => [["No", "Nama", "L/P", ...K.map((k) => RIASEC_LABEL[k]), "Kode", "Catatan"], ...rows.map((r) => (r.filled ? [r.no, r.name, r.g, ...K.map((k) => r.p.raw[k]), r.p.code, r.p.note] : [r.no, r.name, r.g, ...K.map(() => ""), "", "Belum mengisi"]))],
+    csv: () => [["No", "Nama", "L/P", ...K.map((k) => RIASEC_LABEL[k]), "Kode", "Catatan"], ...rows.map((r) => (r.filled ? [r.no, r.name, r.g, ...K.map((k) => r.p.raw[k]), r.p.code, [r.p.note, r.p.provisional ? "kode sementara" : ""].filter(Boolean).join("; ")] : [r.no, r.name, r.g, ...K.map(() => ""), "", "Belum mengisi"]))],
     mount(root) {
       const dlg = $("#mk-card", root);
       $(".mkw", root).addEventListener("click", (e) => {
@@ -82,7 +90,7 @@ export function minatReport(s, res) {
         const p = r.p;
         dlg.innerHTML = `<p class="eyebrow" style="margin-top:0">${r.no}. ${esc(r.name)}</p>
           <div class="mkhead"><div>${radar(Object.fromEntries(K.map((k) => [k, p.pct[k] / 100])), K, RIASEC_LABEL, { avg: Object.fromEntries(K.map((k) => [k, avgPct[k] / 100])), size: 150, bold: p.code ? p.order.slice(0, 3) : [] })}</div>
-          <div><h2>${p.code || (p.low ? "Minat rendah" : "Belum terbedakan")}</h2><p class="muted small">Garis putus-putus: rata-rata kelas.</p></div></div>
+          <div><h2>${p.code ? p.code + (p.provisional ? "*" : "") : "Tanpa kode"}</h2><p class="muted small">${p.provisional ? "Kode sementara. " : ""}Garis putus-putus: rata-rata kelas.</p></div></div>
           ${p.note ? `<p class="notice">Perlu diajak bicara: ${esc(p.note)}.</p>` : ""}
           ${p.code ? `<ul class="tips" style="margin-top:.8rem">${p.order.slice(0, 3).map((k) => `<li><b style="font-weight:500">${RIASEC_LABEL[k]} (${p.raw[k]}).</b> Mapel: ${RIASEC_EX[k].mapel}. Jurusan: ${RIASEC_EX[k].jurusan}.</li>`).join("")}</ul>` : ""}
           <button class="btn block" style="margin-top:1rem" data-close>Tutup</button>`;

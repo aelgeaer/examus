@@ -573,3 +573,9 @@ dialog.sheet::backdrop { background: rgba(12, 35, 64, .45); }
 .lv.l1 { background: var(--sun-soft); }
 .lv.l2 { background: #fbd0a6; }
 .lv.l3 { background: #f6b3b3; }
+
+/* Keterangan istilah */
+.gloss { background: #fff; border-radius: var(--r-l); padding: 1.1rem 1.3rem; margin: .8rem 0 0; }
+.gloss dt { font-weight: 600; margin-top: .9rem; }
+.gloss dt:first-child { margin-top: 0; }
+.gloss dd { margin: .2rem 0 0; color: var(--ink-2); line-height: 1.55; }
