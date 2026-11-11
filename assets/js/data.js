@@ -69,7 +69,20 @@ export const GAYA_ITEMS = [
   g("Saat mengerjakan soal yang sulit, aku…", "membuat coretan atau sketsa", "membaca soalnya dengan suara pelan", "mencoba beberapa cara sampai ketemu"),
   g("Pelajaran terasa menyenangkan kalau…", "ada tayangan atau gambar yang menarik", "ada diskusi dan cerita", "ada praktik atau percobaan"),
   g("Saat belajar untuk ulangan, aku…", "membaca catatan dan ringkasan", "tanya jawab bersama teman", "mengerjakan latihan soal"),
+  g("Waktu mengerjakan PR, aku paling nyaman kalau…", "ada catatan atau gambar di depanku", "membaca pelan-pelan dengan suara atau ditemani musik", "boleh berdiri, berjalan, atau memegang sesuatu"),
+  g("Untuk mempelajari kata atau istilah baru, aku…", "membuat kartu bergambar", "mengulang bunyinya berkali-kali", "memakainya sambil bergerak atau praktik"),
+  g("Kalau diberi tugas, aku lebih suka petunjuk yang…", "tertulis dan ada gambarnya", "dijelaskan secara lisan", "dicontohkan langsung"),
+  g("Aku cepat bosan kalau pelajaran hanya…", "berupa tulisan tanpa gambar", "membaca tanpa ada yang dibicarakan", "duduk dan mendengarkan"),
+  g("Untuk mengingat urutan langkah, aku…", "membayangkan gambarnya", "menyebutkannya berurutan", "menirukan gerakannya"),
+  g("Dalam kerja kelompok, aku sering menjadi yang…", "membuat catatan atau bagan", "memimpin diskusi", "mengerjakan bagian praktiknya"),
 ];
+
+// Penjelasan untuk murid di halaman hasil gaya belajar.
+export const VAK_STUDENT = {
+  V: { verb: "melihat", tips: ["Ubah catatan jadi peta pikiran, bagan, atau gambar kecil.", "Pakai warna untuk menandai bagian yang penting."] },
+  A: { verb: "mendengar dan berbicara", tips: ["Jelaskan pelajaran dengan suaramu sendiri, atau diskusikan dengan teman.", "Ulangi poin penting dengan lantang."] },
+  K: { verb: "bergerak dan mencoba", tips: ["Belajar dengan memperagakan, membuat model, atau percobaan kecil.", "Boleh berdiri atau berjalan sebentar saat menghafal."] },
+};
 
 /* ---------- Minat karier (RIASEC) ---------- */
 export const RIASEC = {

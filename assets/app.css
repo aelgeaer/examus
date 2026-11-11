@@ -377,3 +377,42 @@ table.tbl { border-collapse: collapse; width: 100%; font-size: .93rem; }
 .usermenu .menu a, .usermenu .menu button { display: block; text-align: left; padding: .65rem .8rem; border-radius: 8px; background: none; border: 0; font: inherit; font-weight: 500; cursor: pointer; text-decoration: none; color: inherit; }
 .usermenu .menu a:hover, .usermenu .menu button:hover { background: var(--sky-soft); }
 @media (max-width: 640px) { .usermenu .who { display: none; } }
+
+/* Alur murid: gaya belajar */
+.gb { min-height: 100dvh; display: flex; flex-direction: column; }
+.gb-main { flex: 1; padding-bottom: 3rem; }
+.gb-eyebrow { color: var(--blue); font-weight: 500; margin-top: 1.4rem; }
+.gb h1 { font-size: clamp(1.7rem, 6vw, 2.4rem); line-height: 1.15; margin-top: .5rem; }
+.gb-card { background: var(--sky); border-radius: 28px; padding: 1.6rem; margin-top: 1.4rem; min-height: 170px; }
+.gb-card .n { color: var(--blue-dark); font-size: 1.05rem; }
+.gb-card h2 { font-size: 1.35rem; line-height: 1.25; margin-top: .7rem; }
+.gb-card p { margin-top: .6rem; font-size: 1.1rem; }
+.gb-dots { display: flex; justify-content: center; gap: 1.2rem; margin: 1.4rem 0; }
+.gb-dots i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--ink); }
+.gb-dots i.on { background: var(--blue); border-color: var(--blue); }
+.gb-ghost { display: block; margin: 1rem auto 0; background: none; border: 0; font: inherit; color: var(--ink-2); font-size: 1.05rem; padding: .6rem 1rem; cursor: pointer; }
+.gb-ghost:hover { color: var(--ink); }
+.gb-prog { height: 10px; background: #e3ebf3; border-radius: 999px; overflow: hidden; margin-top: 1.6rem; }
+.gb-prog i { display: block; height: 100%; background: var(--blue); border-radius: 999px; transition: width .25s; }
+.gb-count { margin-top: 1.4rem; font-size: 1.15rem; color: var(--ink-2); }
+.gb-count b { color: var(--ink); font-weight: 500; }
+.gb-opts { display: grid; gap: .7rem; margin-top: 1.4rem; }
+.gb-opt { display: flex; align-items: center; gap: 1rem; width: 100%; text-align: left; background: #fff; border: 2px solid transparent; border-radius: 22px; padding: 1rem 1.1rem; min-height: 64px; cursor: pointer; font: inherit; font-size: 1.05rem; line-height: 1.35; }
+.gb-opt .l { flex: none; width: 40px; height: 40px; border-radius: 50%; background: #eaeff5; display: grid; place-items: center; font-weight: 500; }
+.gb-opt[aria-pressed="true"] { background: var(--sky); border-color: var(--blue); }
+.gb-opt[aria-pressed="true"] .l { background: var(--blue); color: #fff; }
+.gb-names { display: grid; gap: .6rem; margin-top: 1.4rem; }
+.gb-name { background: #fff; border: 2px solid transparent; border-radius: 22px; padding: 1.05rem 1.2rem; text-align: left; font: inherit; font-size: 1.1rem; cursor: pointer; min-height: 58px; }
+.gb-name[aria-pressed="true"] { background: var(--sky); border-color: var(--blue); font-weight: 500; }
+.gb-result .donut { display: block; width: min(240px, 70%); margin: 1.2rem 0 0; }
+.gb-result h1 { margin-top: 1rem; }
+.gb-result .lead { font-size: 1.15rem; margin-top: .4rem; }
+.gb-stack { display: flex; gap: 4px; height: 26px; margin-top: 1.4rem; border-radius: 999px; overflow: hidden; background: var(--sky); padding: 4px; }
+.gb-stack i { display: block; height: 100%; border-radius: 999px; }
+.gb-legend { display: flex; flex-wrap: wrap; gap: .4rem 1.2rem; margin-top: .8rem; font-size: 1rem; }
+.gb-legend .d { display: inline-block; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--ink); vertical-align: -2px; margin-right: .35rem; }
+.gb-tips { background: #fff; border-radius: 24px; padding: 1.3rem 1.4rem; margin-top: 1.4rem; }
+.gb-tips h2 { font-size: 1.25rem; }
+.gb-tips ul { padding-left: 1.2rem; margin-top: .6rem; }
+.gb-tips li + li { margin-top: .5rem; }
+.gb-again { margin-top: 1rem; }
