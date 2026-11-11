@@ -230,7 +230,7 @@ export async function register({ user }) {
     <h1 class="page-title">Daftar sebagai guru</h1>
     <p class="page-sub">Cukup nama dan sekolah Anda. Setelah itu Anda bisa langsung membuat kelas dan membagikan angket ke murid.</p>
     <form id="rg" novalidate>
-      <label class="field"><span>Nama lengkap</span><input type="text" name="name" autocomplete="name" required><span class="hint">Boleh dengan gelar. Tampil di laporan yang dicetak.</span></label>
+      <label class="field"><span>Nama lengkap</span><input type="text" name="name" style="text-transform:uppercase" autocomplete="name" required><span class="hint">Boleh dengan gelar. Tampil di laporan yang dicetak.</span></label>
       <label class="field"><span>Sekolah</span><select name="school" class="btn" style="width:100%;text-align:left" required><option value="">Pilih sekolah</option>${schools.map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join("")}</select></label>
       <label class="field"><span>Nama akun</span><input type="text" name="username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required><span class="hint">Dipakai untuk masuk. Huruf kecil, angka, titik, garis bawah, atau strip.</span></label>
       <label class="field"><span>Kata sandi</span><input type="password" name="pw" autocomplete="new-password" required><span class="hint">Minimal 6 karakter.</span></label>

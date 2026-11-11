@@ -29,7 +29,7 @@ async function makeSupabase() {
   // role = peran di sekolah (Guru BK dst.), kind = jenis akun (admin / guru / siswa).
   const prof = (p) => p && {
     id: p.id, username: p.username, kind: p.kind, isAdmin: p.kind === "admin", isSuper: p.kind === "admin" && !p.school_id,
-    name: p.name || "", role: p.title || "", school: p.schools?.name || "", schoolId: p.school_id || null,
+    name: (p.name || "").toLocaleUpperCase("id-ID"), role: p.title || "", school: p.schools?.name || "", schoolId: p.school_id || null,
     onboarded: !!p.onboarded, mustChange: !!p.must_change, classId: p.class_id || null, memberNo: p.member_no ?? null,
   };
   const sess = (s) => s && { id: s.id, classId: s.class_id, className: s.class_name, code: s.code, type: s.type, config: s.config, roster: s.roster, closesAt: s.closes_at, closed: s.closed, createdAt: s.created_at, filledCount: s.responses?.[0]?.count ?? 0 };
@@ -56,7 +56,7 @@ async function makeSupabase() {
     // Guru mendaftar sendiri, lalu langsung masuk.
     async publicSchools() { return must(await sb.rpc("public_schools")); },
     async register({ username, password, name, schoolId }) {
-      must(await sb.rpc("register_teacher", { p_username: username, p_password: password, p_name: name, p_school: schoolId }));
+      must(await sb.rpc("register_teacher", { p_username: username, p_password: password, p_name: String(name || "").trim().toLocaleUpperCase("id-ID"), p_school: schoolId }));
       return this.signIn(username, password);
     },
     async signOut() { await sb.auth.signOut(); },
@@ -64,7 +64,7 @@ async function makeSupabase() {
     async updateProfile(patch) {
       const map = { name: "name", role: "title", onboarded: "onboarded" };
       const row = {};
-      for (const [k, col] of Object.entries(map)) if (k in patch) row[col] = patch[k];
+      for (const [k, col] of Object.entries(map)) if (k in patch) row[col] = k === "name" ? String(patch[k] || "").trim().toLocaleUpperCase("id-ID") : patch[k];
       return prof(must(await sb.from("profiles").update(row).eq("id", await userId()).select(PROFILE).single()));
     },
 
@@ -115,7 +115,7 @@ async function makeSupabase() {
     async adminUsers() { return must(await sb.rpc("admin_users")); },
     async adminClasses() { return this.listClasses(); },
     async adminCreateUser(u) {
-      return must(await sb.rpc("admin_create_user", { p_username: u.username, p_password: u.password, p_name: u.name, p_kind: u.kind, p_school: u.schoolId || null, p_title: u.title || null, p_class: null, p_member: null }));
+      return must(await sb.rpc("admin_create_user", { p_username: u.username, p_password: u.password, p_name: String(u.name || "").trim().toLocaleUpperCase("id-ID"), p_kind: u.kind, p_school: u.schoolId || null, p_title: u.title || null, p_class: null, p_member: null }));
     },
     async adminSetPassword(id, pw) { must(await sb.rpc("admin_set_password", { p_user: id, p_password: pw })); },
     async adminDeleteUser(id) { must(await sb.rpc("admin_delete_user", { p_user: id })); },

@@ -15,7 +15,7 @@ export function onboarding({ user }) {
       <h1 class="page-title" style="margin-top:.3rem">Selamat datang di Examus</h1>
       <p class="page-sub">Isi data singkat ini. Nama dan sekolah Anda tampil di laporan yang dicetak.</p>
       <form id="ob-form" novalidate>
-        <label class="field"><span>Nama lengkap</span><input type="text" name="name" value="${esc(user.name)}" autocomplete="name"><span class="hint">Boleh dengan gelar. Dipakai untuk sapaan dan tanda tangan laporan.</span></label>
+        <label class="field"><span>Nama lengkap</span><input type="text" name="name" style="text-transform:uppercase" value="${esc(user.name)}" autocomplete="name"><span class="hint">Boleh dengan gelar. Dipakai untuk sapaan dan tanda tangan laporan.</span></label>
         <div class="field"><span class="flabel" id="role-l">Peran di sekolah</span><div class="chips" role="radiogroup" aria-labelledby="role-l">${ROLES.map((r) => `<label><input type="radio" name="role" value="${r}"${user.role === r ? " checked" : ""}><span>${r}</span></label>`).join("")}</div></div>
         <p class="muted" style="margin-top:1rem">Sekolah: <b style="font-weight:500">${esc(user.school || "-")}</b></p>
         <p class="err" id="ob-err" role="alert"></p>
@@ -461,7 +461,7 @@ export async function admin({ user }) {
           <label><input type="radio" name="kind" value="guru" checked><span>Guru</span></label>
           <label><input type="radio" name="kind" value="admin"><span>Admin</span></label></div></div>
         ${sup ? `<label class="field" id="w-school"><span>Sekolah</span><select name="fschool" class="btn"></select></label>` : ""}
-        <label class="field"><span>Nama lengkap</span><input type="text" name="fname" autocomplete="off"></label>
+        <label class="field"><span>Nama lengkap</span><input type="text" name="fname" style="text-transform:uppercase" autocomplete="off"></label>
         <label class="field" id="w-title"><span>Peran di sekolah (opsional)</span><input type="text" name="ftitle" placeholder="Misalnya: Guru BK" autocomplete="off"></label>
         <label class="field"><span>Nama akun</span><input type="text" name="fuser" autocomplete="off" autocapitalize="none" spellcheck="false"><span class="hint">Huruf kecil, angka, titik, garis bawah, atau strip. Tidak boleh sama dengan akun lain.</span></label>
         <label class="field"><span>Kata sandi awal</span><div class="rowflex" style="gap:.5rem"><input type="text" name="fpass" autocomplete="off" spellcheck="false" style="flex:1"><button type="button" class="btn sm" id="f-rand">Acak</button></div><span class="hint">Pemilik akun diminta menggantinya saat masuk pertama.</span></label>
